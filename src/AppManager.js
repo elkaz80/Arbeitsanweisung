@@ -140,35 +140,46 @@ class AppManager {
     }
 
      // Wendet Keyframe-Animationen auf Objekte an
-     applyAnimations(time) {
-         if (!this.animationManager || !this.scene || !this.controlsManager || !this.selectionManager) return;
-         const isGizmoDragging = this.controlsManager.isDraggingGizmo;
-         const selectedObj = this.selectionManager.getSelectedObject();
+     applyAnimations(time) { // Parameter ist 'time'
+        // Sicherheitsprüfungen für benötigte Manager
+        if (!this.animationManager || !this.scene || !this.controlsManager || !this.selectionManager) return;
 
-         // Gehe durch alle Objekte, für die Keyframes existieren könnten
-         for (const uuid in this.animationManager.keyframes) {
-             const obj = this.scene.getObjectByProperty('uuid', uuid); // Finde Objekt in Szene
-             // TODO: Auch cssScene durchsuchen für HTML-Elemente
-             if (!obj) continue; // Objekt nicht (mehr) in Szene
+        const isGizmoDragging = this.controlsManager.isDraggingGizmo;
+        // *** HIER IST DIE KORREKTUR (erneut) ***
+        // Holt das erste (oder einzige) ausgewählte Objekt, oder null
+        const selectedObj = this.selectionManager.getSingleSelectedObject(); // Sicherstellen, dass diese Zeile genau so aussieht!
 
-             // Nur animieren, wenn NICHT ausgewählt und vom Gizmo gezogen
-             if (!(isGizmoDragging && obj === selectedObj)) {
-                 if (!hasInvalidTransform(obj)) {
-                     const animatedValues = this.animationManager.getAnimatedValues(obj, time);
-                     if (animatedValues.position) obj.position.copy(animatedValues.position);
-                     if (animatedValues.quaternion) obj.quaternion.copy(animatedValues.quaternion);
-                     if (animatedValues.scale && obj !== this.cameraPivot) obj.scale.copy(animatedValues.scale);
+        // Gehe durch alle Objekte, für die Keyframes existieren könnten
+        // Annahme: animationManager.keyframes enthält UUIDs als Schlüssel
+        for (const uuid in this.animationManager.keyframes) {
+            const obj = this.scene.getObjectByProperty('uuid', uuid); // Finde Objekt in Szene
 
-                     // Spezielle Prüfung für Kamera-Pivot-Update, damit OrbitControls folgt
-                     if (obj === this.cameraPivot && this.controlsManager.orbitControls?.enabled && (animatedValues.position || animatedValues.quaternion)) {
-                          this.controlsManager.orbitControls.target.copy(this.cameraPivot.position);
-                     }
-                 }
-             }
-         }
-     }
+            // TODO: Auch cssScene durchsuchen für HTML-Elemente, falls diese animiert werden sollen
+            if (!obj) continue; // Objekt nicht (mehr) in Szene
 
+            // Nur animieren, wenn NICHT dieses Objekt ausgewählt ist UND vom Gizmo gezogen wird
+            // Dies verhindert, dass die Animation die manuelle Transformation überschreibt.
+            if (!(isGizmoDragging && obj === selectedObj)) {
+                // Zusätzliche Sicherheitsprüfung auf gültige Transformation
+                if (!hasInvalidTransform(obj)) {
+                    // Hole Animationswerte für die aktuelle Zeit
+                    const animatedValues = this.animationManager.getAnimatedValues(obj, time);
 
+                    // Wende animierte Werte an
+                    if (animatedValues.position) obj.position.copy(animatedValues.position);
+                    if (animatedValues.quaternion) obj.quaternion.copy(animatedValues.quaternion);
+                    // Verhindere Skalierungs-Animation für Kamera-Pivot
+                    if (animatedValues.scale && obj !== this.cameraPivot) obj.scale.copy(animatedValues.scale);
+
+                    // Spezielle Prüfung für Kamera-Pivot-Update, damit OrbitControls folgt
+                    if (obj === this.cameraPivot && this.controlsManager.orbitControls?.enabled && (animatedValues.position || animatedValues.quaternion)) {
+                        this.controlsManager.orbitControls.target.copy(this.cameraPivot.position);
+                    }
+                }
+            }
+            // else { // Optional: Log, wenn Animation wegen Gizmo-Drag übersprungen wird }
+        }
+    }
     start() {
         console.log("[AppManager] Starting loop.");
         if (!this.controlsManager?.getOrbitControls()) { console.error("OrbitControls not ready!"); return; }

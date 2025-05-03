@@ -5,44 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>3D Arbeitsanweisung Editor</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined" rel="stylesheet">
-</head>
+    <link rel="stylesheet" href="/src/style.css"> </head>
 <body>
     <nav id="navbar">
         <div class="navbar-group left">
-             <div id="file-menu-container" class="menu-container">
+            <div id="file-menu-container" class="menu-container">
                 <button id="file-menu-btn" class="icon-btn" title="Datei"><span class="material-icons">folder</span></button>
                 <div id="file-submenu" class="submenu">
+                    <button id="uploadButton-in-menu">
+                        <span class="material-icons">file_upload</span>Modell laden...
+                    </button>
+                    <hr>
+                    <button id="export-btn-in-menu">
+                        <span class="material-icons">save</span>Exportieren...
+                    </button>
+                    <hr>
+                    <div class="submenu-item" style="color: var(--text-color-muted); font-size: 0.8em; padding-bottom: 0; cursor: default;">Transformation:</div>
+                    <div id="transform-controls-container-submenu" class="button-group" style="padding: 5px 0; border: none; margin-left: 8px;"> <button id="transform-translate-btn" class="icon-btn" title="Verschieben (G)"><span class="material-icons">open_with</span></button>
+                        <button id="transform-rotate-btn" class="icon-btn" title="Drehen (R)"><span class="material-icons">rotate_90_degrees_ccw</span></button>
+                        <button id="transform-scale-btn" class="icon-btn" title="Skalieren (S)"><span class="material-icons">aspect_ratio</span></button>
                     </div>
+                </div>
             </div>
-             <div id="html-menu-container" class="menu-container">
+
+            <div id="html-menu-container" class="menu-container">
                 <button id="html-menu-btn" class="icon-btn" title="HTML Element"><span class="material-icons">description</span></button>
                 <div id="html-submenu" class="submenu">
-                     </div>
+                    </div>
             </div>
+
             <div id="tools-menu-container" class="menu-container">
                  <button id="tools-menu-btn" class="icon-btn" title="Werkzeuge"><span class="material-icons">build</span></button>
                  <div id="tools-submenu" class="submenu tools-menu">
                       </div>
              </div>
-             <div id="transform-controls-container" class="button-group">
-                <button id="transform-translate-btn" class="icon-btn" title="Verschieben (G)"><span class="material-icons">open_with</span></button>
-                <button id="transform-rotate-btn" class="icon-btn" title="Drehen (R)"><span class="material-icons">rotate_90_degrees_ccw</span></button>
-                <button id="transform-scale-btn" class="icon-btn" title="Skalieren (S)"><span class="material-icons">aspect_ratio</span></button>
-            </div>
+
              <button id="settings-btn" class="icon-btn" title="Einstellungen"><span class="material-icons">settings</span></button>
-             </div>
-         <div class="navbar-group right"></div>
+
+        </div>
+        <div class="navbar-group right"></div>
     </nav>
 
     <div id="main-content">
         <div id="loaded-objects-panel">
             <div class="panel-header">Geladene Objekte</div>
-            <ul id="loaded-objects-list">
-                </ul>
+            <ul id="loaded-objects-list"></ul>
         </div>
         <div id="scene-container">
             <canvas id="three-canvas"></canvas>
-            </div>
+        </div>
     </div>
 
     <div id="timeline-panel">
@@ -58,10 +69,12 @@
                     <span id="time-indicator-label">0.00s</span>
                     <div id="time-indicator-line"></div>
                 </div>
-                </div>
+            </div>
             <input type="text" id="timeline-range-end-input" value="10.0s">
         </div>
     </div>
+
+    <input type="file" id="fileInput" accept=".gltf,.glb,.obj" style="display: none;">
 
     <script type="module" src="/src/main.js"></script>
 </body>

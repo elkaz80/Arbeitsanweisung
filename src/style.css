@@ -1,3 +1,5 @@
+/* src/style.css - Vollständig & Korrigiert */
+
 /* Basis & Dark Theme */
 :root {
   --bg-color: #1a1d21;
@@ -12,20 +14,44 @@
   --button-hover-bg: #4a4f5a;
 }
 
-body { margin: 0; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; overflow: hidden; background-color: var(--bg-color); color: var(--text-color); }
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  font-family: sans-serif;
+  overflow: hidden;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
 canvas { display: block; }
 
 /* Navbar */
-#navbar { display: flex; justify-content: space-between; align-items: center; background-color: var(--panel-bg); color: var(--text-color); padding: 0 10px; height: 40px; box-sizing: border-box; flex-shrink: 0; border-bottom: 1px solid var(--border-color); }
+#navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--panel-bg);
+  color: var(--text-color);
+  padding: 0 10px;
+  height: 40px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+  position: relative; /* Wichtig für z-index Kontext */
+  z-index: 10;  /* Hoher z-index */
+}
 .navbar-group { display: flex; align-items: center; height: 100%; }
-.navbar-group.left { justify-content: flex-start; flex-wrap: nowrap; /* Verhindert Umbruch */ overflow: hidden; /* Verhindert Überlaufen, falls zu viele Buttons */ }
+.navbar-group.left { justify-content: flex-start; flex-wrap: nowrap; overflow: visible; }
 .navbar-group.right { justify-content: flex-end; }
 
 /* Buttons & Gruppen in Navbar */
 .icon-btn { background: none; border: none; color: var(--text-color); padding: 6px 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: background-color 0.15s ease; margin: 0 2px; }
 .icon-btn:hover { background-color: var(--button-hover-bg); }
-.icon-btn:active { background-color: var(--highlight-bg); transform: scale(0.95); /* Kleiner Klick-Effekt */ }
-.icon-btn .material-icons, .icon-btn .material-icons-outlined { font-size: 20px; vertical-align: middle; display: block; }
+.icon-btn:active { background-color: var(--highlight-bg); transform: scale(0.95); }
+/* KORRIGIERT: vertical-align entfernt */
+.icon-btn .material-icons, .icon-btn .material-icons-outlined { font-size: 20px; display: block; }
 .button-group { display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: 4px; margin: 0 5px; }
 .button-group .icon-btn { margin: 0; border-radius: 0; }
 .button-group .icon-btn:not(:last-child) { border-right: 1px solid var(--border-color); }
@@ -35,26 +61,50 @@ canvas { display: block; }
 
 /* Menüs */
 .menu-container { position: relative; margin: 0 1px; }
-.submenu { display: none; position: absolute; top: calc(100% + 2px); /* Kleiner Abstand */ left: 0; background-color: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 4px; padding: 5px; z-index: 1000; min-width: 200px; box-shadow: 0 3px 8px rgba(0,0,0,0.3); max-height: 70vh; /* Verhindert, dass Menü zu lang wird */ overflow-y: auto; }
+.submenu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  background-color: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 5px;
+  min-width: 200px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 12; /* Noch höher als Navbar */
+}
 .submenu.active { display: block; }
 .submenu button, .submenu .submenu-item, .submenu .submenu-category { display: flex; align-items: center; background: none; border: none; color: var(--text-color); padding: 8px 12px; text-align: left; width: 100%; cursor: pointer; font-size: 0.9em; white-space: nowrap; box-sizing: border-box; }
 .submenu button:hover { background-color: var(--button-hover-bg); }
 .submenu hr { border: none; border-top: 1px solid var(--border-color); margin: 5px 0; }
 .submenu .material-icons, .submenu .material-icons-outlined { margin-right: 10px; font-size: 18px; color: var(--text-color-muted); }
 .submenu button .material-icons { color: inherit; }
-.tools-menu { min-width: 250px; } /* Breiter für Werkzeuge */
+.tools-menu { min-width: 250px; }
 .submenu-category { color: var(--accent-color-gold); font-weight: bold; font-size: 0.8em; padding-top: 8px; padding-bottom: 4px; cursor: default; text-transform: uppercase; letter-spacing: 0.5px; }
 .submenu-category:not(:first-child) { border-top: 1px solid var(--border-color); margin-top: 5px;}
-.submenu .submenu-item { padding-left: 15px; /* Weniger Einrückung */ cursor: pointer; }
-.submenu .submenu-item .material-icons, .submenu .submenu-item .material-icons-outlined { margin-right: 8px; } /* Icon näher am Text */
+.submenu .submenu-item { padding-left: 15px; cursor: pointer; }
+.submenu .submenu-item .material-icons, .submenu .submenu-item .material-icons-outlined { margin-right: 8px; }
+/* Spezifischer Style für Transform-Button-Gruppe im Submenu */
+#transform-controls-container-submenu {
+    padding: 5px 0;
+    border: none; /* Kein eigener Rahmen */
+    margin-left: 8px; /* Einrückung wie submenu-item */
+    justify-content: flex-start; /* Buttons linksbündig */
+    /* Wichtig: Muss 'display: flex' haben, um als Gruppe zu funktionieren */
+    display: flex;
+    align-items: center;
+}
 
 
 /* Haupt-Layout */
 #main-content { flex: 1; display: flex; overflow: hidden; }
 
-/* NEU: Panel für geladene Objekte (ersetzt Scene Graph) */
+/* Panel für geladene Objekte */
 #loaded-objects-panel {
-    width: 200px; /* Schmaler */
+    width: 200px;
     flex-shrink: 0; background: var(--panel-bg); overflow-y: auto;
     border-right: 1px solid var(--border-color); display: flex; flex-direction: column;
 }
@@ -68,26 +118,58 @@ canvas { display: block; }
 }
 #loaded-objects-list li {
     padding: 5px 8px; margin-bottom: 3px; border-radius: 3px;
-    cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    cursor: pointer; white-space: nowrap; overflow: visible; text-overflow: ellipsis;
     font-size: 0.9em;
 }
 #loaded-objects-list li:hover { background-color: var(--button-hover-bg); }
 #loaded-objects-list li.selected { background-color: var(--accent-color-blue); color: #fff; }
-#loaded-objects-list li .material-icons { /* Optional: Icon für Objekttyp */
-    font-size: 16px; margin-right: 5px; vertical-align: middle; color: var(--text-color-muted);
+#loaded-objects-list li .material-icons {
+    font-size: 16px; margin-right: 5px; vertical-align: middle; /* Hier ist vertical-align ok */ color: var(--text-color-muted);
 }
 #loaded-objects-list li.selected .material-icons { color: #fff; }
 
 
 /* 3D Szene */
-#scene-container { flex: 1; position: relative; display: flex; background-color: var(--bg-color); }
-#three-canvas { flex: 1; }
-#scene-container .css3d-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 1; }
-.html-3d-element { background-color: rgba(42, 45, 49, 0.85); border: 1px solid var(--border-color); border-radius: 5px; padding: 10px; box-sizing: border-box; overflow: auto; pointer-events: auto; font-size: 14px; color: var(--text-color); display: inline-block; min-width: 100px; transition: opacity 0.15s ease-in-out, border-color 0.15s ease-in-out; user-select: text; }
-.html-3d-element.gizmo-active { opacity: 0.6; pointer-events: none; border-color: var(--accent-color-blue); user-select: none; }
+#scene-container {
+    flex: 1;
+    position: relative; /* Wichtig für absolute Positionierung von Overlays */
+    display: flex;
+    background-color: var(--bg-color);
+    overflow: hidden; /* Verhindert, dass Inhalt überläuft und Navbar blockiert */
+}
+#three-canvas {
+    flex: 1;
+    display: block;
+}
+#scene-container .css3d-overlay {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none; /* Sehr wichtig! Lässt Klicks zum WebGL-Canvas durch */
+    overflow: hidden;
+    z-index: 1; /* Standard-z-index, unter UI */
+}
+
+/* HTML-Elemente in 3D */
+.html-3d-element {
+    background-color: rgba(42, 45, 49, 0.85);
+    border: 1px solid var(--border-color);
+    border-radius: 5px; padding: 10px;
+    box-sizing: border-box; overflow: auto;
+    pointer-events: auto; /* Erlaubt Interaktion mit dem HTML-Element selbst */
+    font-size: 14px; color: var(--text-color);
+    display: inline-block; min-width: 100px;
+    transition: opacity 0.15s ease-in-out, border-color 0.15s ease-in-out;
+    user-select: text;
+}
+.html-3d-element.gizmo-active {
+    opacity: 0.6;
+    pointer-events: none; /* Verhindert Interaktion, wenn vom Gizmo ausgewählt */
+    border-color: var(--accent-color-blue);
+    user-select: none;
+}
 .html-3d-element .html-content { width: 100%; height: 100%; box-sizing: border-box; }
 .html-3d-element h1, .html-3d-element h2, .html-3d-element h3, .html-3d-element h4, .html-3d-element p { margin: 0; }
-.html-3d-element input[type="text"], .html-3d-element textarea { width: calc(100% - 10px); margin-top: 5px; padding: 3px; border: 1px solid #ccc; box-sizing: border-box; background-color: #f0f0f0; color: #333; } /* Heller für Input */
+.html-3d-element input[type="text"], .html-3d-element textarea { width: calc(100% - 10px); margin-top: 5px; padding: 3px; border: 1px solid #ccc; box-sizing: border-box; background-color: #f0f0f0; color: #333; }
 .html-3d-element img, .html-3d-element iframe { max-width: 100%; height: auto; display: block; }
 .html-3d-element .video-content iframe { width: 100%; aspect-ratio: 16 / 9; }
 .html-3d-element ul, .html-3d-element ol { padding-left: 20px; margin-top: 0.5em; }
@@ -99,31 +181,43 @@ canvas { display: block; }
 
 /* Timeline Panel */
 #timeline-panel {
-    height: 70px; background-color: rgba(42, 45, 49, 0.9); /* Leicht transparent */
+    height: 70px; background-color: rgba(42, 45, 49, 0.9);
     border-top: 1px solid var(--border-color); display: flex; flex-direction: column;
     align-items: center; justify-content: center; flex-shrink: 0;
+    position: relative; /* Für z-index Kontext */
+    z-index: 10; /* Unter Navbar/Menüs, aber über Standard */
 }
 #timeline-controls-container { display: flex; align-items: center; width: 98%; margin-bottom: 5px; padding: 5px 0; }
 #timeline-buttons { display: flex; align-items: center; margin-right: 15px; }
-#timeline-buttons button { background: none; border: 1px solid transparent; padding: 4px; /* Etwas größer */ cursor: pointer; color: var(--text-color-muted); border-radius: 3px; transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease; }
+#timeline-buttons button { background: none; border: 1px solid transparent; padding: 4px; cursor: pointer; color: var(--text-color-muted); border-radius: 3px; transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease; }
 #timeline-buttons button:hover { color: var(--text-color); background-color: var(--button-hover-bg); }
 #timeline-buttons button:active { background-color: var(--highlight-bg); border-color: var(--accent-color-blue); transform: scale(0.95); }
 #timeline-range-start, #timeline-range-end-label { margin: 0 5px; font-size: 0.9em; color: var(--text-color-muted); }
 #timeline-range-end-input { width: 55px; margin: 0 5px; text-align: right; border: none; background-color: transparent; padding: 1px 2px; font-family: inherit; font-size: 0.9em; color: var(--text-color); border-bottom: 1px solid var(--text-color-muted); }
 #timeline-range-end-input:focus { outline: none; border-bottom-color: var(--accent-color-blue); }
 #keyframe-track-container { position: relative; flex-grow: 1; height: 20px; background: #555; margin: 0 10px; cursor: crosshair; padding: 0; border-radius: 3px; }
-.keyframe-marker { position: absolute; top: 0; bottom: 0; width: 2px; background-color: var(--accent-color-magenta); cursor: grab; transform: translateX(-1px); z-index: 1; opacity: 0.8; }
+.keyframe-marker { position: absolute; top: 0; bottom: 0; width: 2px; background-color: var(--accent-color-magenta); cursor: grab; transform: translateX(-1px); z-index: 11; opacity: 0.8; }
 .keyframe-marker.type-position { background-color: var(--accent-color-blue); }
 .keyframe-marker.type-scale { background-color: var(--accent-color-gold); }
 .keyframe-marker.type-mixed { background: linear-gradient(to bottom, var(--accent-color-magenta), var(--accent-color-blue), var(--accent-color-gold)); }
-#time-indicator { position: absolute; top: -5px; /* Höher positionieren */ bottom: -5px; left: 0; width: 2px; cursor: grab; z-index: 2; display: flex; flex-direction: column; align-items: center; }
+#time-indicator { position: absolute; top: -5px; bottom: -5px; left: 0; width: 2px; cursor: grab; z-index: 12; display: flex; flex-direction: column; align-items: center; }
 #time-indicator:active { cursor: grabbing; }
-#time-indicator-label { position: absolute; top: 0; /* Direkt über der Leiste */ left: 50%; transform: translateX(-50%); font-size: 0.8em; background-color: var(--accent-color-blue); color: #fff; padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
-#time-indicator-line { position: absolute; top: 5px; /* Start unter Label */ bottom: 0px; /* Endet am Boden */ left: 0; width: 100%; /* Korrigiert */ background-color: var(--accent-color-blue); opacity: 0.8; }
+#time-indicator-label { position: absolute; top: 0; left: 50%; transform: translateX(-50%); font-size: 0.8em; background-color: var(--accent-color-blue); color: #fff; padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
+#time-indicator-line { position: absolute; top: 5px; bottom: 0px; left: 0; width: 100%; background-color: var(--accent-color-blue); opacity: 0.8; }
 
 /* Verstecktes File Input */
 #fileInput { display: none; }
 
 /* lil-gui Anpassungen (optional) */
-.lil-gui { font-size: 11px !important; --widget-color: var(--accent-color-blue) !important; --background-color: var(--panel-bg) !important; --text-color: var(--text-color) !important; --title-background-color: var(--highlight-bg) !important; --widget-padding: 4px !important; --folder-indent: 10px !important; z-index: 1001 !important;}
+/* Stelle sicher, dass lil-gui nicht über den Submenüs liegt */
+.lil-gui {
+    font-size: 11px !important;
+    --widget-color: var(--accent-color-blue) !important;
+    --background-color: var(--panel-bg) !important;
+    --text-color: var(--text-color) !important;
+    --title-background-color: var(--highlight-bg) !important;
+    --widget-padding: 4px !important;
+    --folder-indent: 10px !important;
+    z-index: 9 !important; /* Unter Navbar(1010)/Menüs(1020), aber über Szene(1)/Standard */
+}
 .lil-gui .title { color: var(--accent-color-gold) !important; }

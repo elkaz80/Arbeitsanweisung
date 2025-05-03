@@ -84,3 +84,10 @@ Die Anwendung befindet sich derzeit in der Entwicklung und wird aktiv refaktoris
 * Untersuchung des "Szene wandert"-Problems (wahrscheinlich `OrbitControls.target`).
 
 ---
+
+#TODO 
+Wichtig (nochmal zur Erinnerung für Draco):
+
+Vite optimiert zwar den Import des DRACOLoader.js-Moduls, aber es weiß nicht automatisch, wo die separaten Draco-Decoder-Dateien (draco_decoder.wasm, draco_decoder.js) liegen. Du musst also immer noch sicherstellen, dass der Pfad, den du in LoaderService.js bei dracoLoader.setDecoderPath('/pfad/zu/draco/libs/'); angibst, korrekt ist und auf die tatsächlichen Decoder-Dateien in deinem Projekt (oft im public-Ordner oder einem ähnlichen statischen Verzeichnis) oder auf einem CDN zeigt.
+
+Ansonsten sieht es gut aus! Vite hat die Änderungen korrekt übernommen. Du solltest jetzt in der Lage sein, die verschiedenen neuen Dateitypen zu testen.
