@@ -1,34 +1,31 @@
-// src/ControlsManager.js (Mit Phase 2 Logik)
+// src/ControlsManager.js (Pivot-Ansatz Version)
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-// Stelle sicher, dass utils importiert wird und tempBox/tempSize enthält
-import { tempBox, tempSize } from './utils.js';
+import { tempBox, tempSize } from './utils.js'; // tempVec ggf. hinzufügen
 
-// Hilfsmatrizen für Berechnungen (global für die Klasse oder pro Methode neu erstellen)
-const mat4 = new THREE.Matrix4();
-const vec3 = new THREE.Vector3(); // Zusätzlicher Hilfsvektor
+// Hilfsmatrizen
+const mat4 = new THREE.Matrix4(); // Wiederverwendbar
+const vec3 = new THREE.Vector3(); // Wiederverwendbar
 
 class ControlsManager {
-    // SelectionManager wird jetzt über setSelectionManager gesetzt
-    constructor(camera, domElement) {
-        if (!camera || !domElement) {
-            throw new Error("ControlsManager requires camera and domElement!");
-        }
+    constructor(camera, domElement) { // Nimmt selectionManager nicht mehr im Konstruktor
+        if (!camera || !domElement) { throw new Error("ControlsManager requires camera and domElement!"); }
         this.camera = camera;
         this.domElement = domElement;
-        this.selectionManager = null; // Wird später gesetzt
-        this.scene = null; // Wird in init gesetzt
+        this.selectionManager = null; // Wird über Setter gesetzt
+        this.scene = null; // Wird über init gesetzt
 
         this.orbitControls = null;
         this.transformControls = null;
         this.isDraggingGizmo = false;
 
-        // Zustand für Multi-Transformation
-        this.isTransformingMultiGroup = false;
-        this.multiGroupTransformStart = new THREE.Matrix4();
-        this.childDataMap = new Map(); // { child: { initialMatrixWorld, originalParent } }
+        // --- Zustand für Pivot-Transformation ---
+        this.isTransformingPivot = false;
+        this.pivotTransformStart = new THREE.Matrix4();
+        this.selectedObjectsAtPivotStart = []; // Speichert Referenzen auf ausgewählte Objekte
+        this.objectDataAtPivotStart = new Map(); // {obj: {initialMatrixWorld}}
 
         // Methoden binden
         this.onDraggingChanged = this.onDraggingChanged.bind(this);
@@ -36,260 +33,234 @@ class ControlsManager {
         this.onTransformEnd = this.onTransformEnd.bind(this);
     }
 
-    // NEU: Setter-Methode für SelectionManager
-    setSelectionManager(selectionManager) {
+    setSelectionManager(selectionManager) { // Wie vorher
         this.selectionManager = selectionManager;
         console.log("[ControlsManager] SelectionManager reference set.");
     }
 
-    init(scene) { // Szene wird hier übergeben
-        this.scene = scene; // Szene speichern für später (Fallback Reparenting)
+    init(scene) { // Wie vorher
+        this.scene = scene;
         console.log("[ControlsManager] Initializing...");
-
         // OrbitControls
         this.orbitControls = new OrbitControls(this.camera, this.domElement);
-        this.orbitControls.enableDamping = true;
-        this.orbitControls.dampingFactor = 0.1;
+        this.orbitControls.enableDamping = true; this.orbitControls.dampingFactor = 0.1;
         console.log("[ControlsManager] OrbitControls initialized.");
-
         // TransformControls
         this.transformControls = new TransformControls(this.camera, this.domElement);
-        this.transformControls.visible = false;
-        this.transformControls.name = "TransformControlsGizmo";
-        this.transformControls.renderOrder = 999;
-
-        // Listener hinzufügen
+        this.transformControls.visible = false; this.transformControls.name = "TransformControlsGizmo"; this.transformControls.renderOrder = 999;
+        // Listener
         this.transformControls.addEventListener('dragging-changed', this.onDraggingChanged);
         this.transformControls.addEventListener('mouseDown', this.onTransformStart);
         this.transformControls.addEventListener('mouseUp', this.onTransformEnd);
-
-        if (this.scene) {
-             this.scene.add(this.transformControls);
-             console.log("[ControlsManager] TransformControls initialized, listeners added, and added to scene.");
-        } else {
-            console.error("[ControlsManager] Scene object not provided during init!");
-        }
+        if (this.scene) { this.scene.add(this.transformControls); console.log("[ControlsManager] TransformControls initialized..."); }
+        else { console.error("[ControlsManager] Scene object not provided during init!"); }
     }
 
-    onDraggingChanged(event) {
+    onDraggingChanged(event) { // Wie vorher
         if (!this.orbitControls) return;
         const dragging = event.value;
         this.orbitControls.enabled = !dragging;
         this.isDraggingGizmo = dragging;
     }
 
-    update(deltaTime) {
-        if (this.orbitControls?.enabled) {
-            this.orbitControls.update();
-        }
+    update(deltaTime) { // Wie vorher
+        if (this.orbitControls?.enabled) { this.orbitControls.update(); }
     }
 
+    // --- attach überarbeitet für Pivot ---
     attach(object) {
-        console.log(`[ControlsManager] Attaching TC to: ${object?.name || object?.uuid}`);
-        if (this.transformControls && object) {
-            try {
-                // Wichtig: Vor dem Anhängen sicherstellen, dass keine alte Transformation läuft
-                 if (this.isTransformingMultiGroup) {
-                    console.warn("[ControlsManager] Attach called while multi-transform was potentially active. Resetting state.");
-                    this.resetMultiTransformState(); // Zustand sicherheitshalber zurücksetzen
-                 }
+        const objectId = object?.name || object?.uuid || 'Unknown'; // Bessere Log-Info
+        console.log(`[ControlsManager] Attaching TC to: ${objectId}`);
+        if (!this.transformControls) { console.warn("Attach called but TC not initialized."); return; }
+        if (!object) { console.warn("Attach called with null object."); this.detach(); return; }
 
-                this.transformControls.attach(object);
-                this.transformControls.visible = true;
-                this.calculateGizmoSize(object);
-                console.log(`[ControlsManager] TC Attached. Visible: ${this.transformControls.visible}, Size: ${this.transformControls.size.toFixed(2)}`);
-            } catch(e) {
-                 console.error(`[ControlsManager] Error attaching TC to ${object?.name || object?.uuid}:`, e);
-                 this.detach();
-            }
-        } else {
-             console.warn("[ControlsManager] Attach called with no object or TC not initialized.");
+        try {
+            // Prüfe, ob eine Pivot-Transformation abgebrochen werden muss
+             if (this.isTransformingPivot && this.transformControls.object !== object) {
+                console.warn("[ControlsManager] Attach called while pivot transform was active! Resetting state.");
+                this.resetPivotTransformState();
+             }
+
+            this.transformControls.attach(object);
+            this.transformControls.visible = true;
+
+            // --- GRÖSSE IMMER FIX SETZEN ---
+            const desiredFixedSize = 1.0; // <<< Setze hier deine gewünschte feste Größe!
+            this.transformControls.size = desiredFixedSize;
+            // --- ENDE GRÖSSENÄNDERUNG ---
+
+            // Log angepasst
+            const targetType = (this.selectionManager && object === this.selectionManager.getPivotObject()) ? "Pivot" : "Object";
+            console.log(`[ControlsManager] TC Attached to ${targetType}. Visible: true, Size: ${this.transformControls.size.toFixed(2)} (Fixed)`);
+
+        } catch(e) {
+             console.error(`[ControlsManager] Error attaching TC to ${objectId}:`, e);
+             this.detach();
         }
     }
 
-    // Angepasstes Detach prüft auf laufende Multi-Transformation
+    // --- detach überarbeitet (einfacher) ---
     detach() {
         console.log("[ControlsManager] Detach requested.");
-
-        // Wenn gerade eine Multi-Transformation lief, diese sauber beenden
-        if (this.isTransformingMultiGroup) {
-             console.warn("[ControlsManager] Detach called during multi-group transform! Applying final transform before detaching.");
-             this.onTransformEnd(); // Diese Methode kümmert sich um das Detachen und Aufräumen
-             return; // onTransformEnd hat bereits alles erledigt
+        // Breche laufende Pivot-Transformation ab, falls vorhanden
+        if (this.isTransformingPivot) {
+             console.warn("[ControlsManager] Detach called during pivot transform! Resetting state.");
+             // Hier keine Transformation anwenden, da extern getriggert. Nur State resetten.
+             this.resetPivotTransformState();
         }
 
-        // Normales Detach für Einzelauswahl oder wenn nichts dran war
+        // Normales Detach
         if (this.transformControls) {
-            if (this.transformControls.object) { // Nur detachen, wenn wirklich was dran hängt
+            if (this.transformControls.object) {
                  console.log("[ControlsManager] Performing actual detach.");
                 this.transformControls.detach();
                 this.transformControls.visible = false;
             } else {
-                 // console.log("[ControlsManager] Detach requested, but nothing attached.");
-                 this.transformControls.visible = false; // Sicherstellen, dass es unsichtbar ist
+                 this.transformControls.visible = false; // Sicherstellen, dass unsichtbar
             }
         }
-        // OrbitControls nur aktivieren, wenn wir nicht gerade das Ziehen des Gizmos beendet haben
+        // OrbitControls ggf. aktivieren
         if (this.orbitControls && !this.isDraggingGizmo) {
              this.orbitControls.enabled = true;
-             // console.log("[ControlsManager] OrbitControls potentially re-enabled on detach.");
-        } else {
-             // console.log("[ControlsManager] OrbitControls not re-enabled (isDraggingGizmo=", this.isDraggingGizmo, ")");
         }
     }
 
-    // Gizmo-Größe berechnen (mit optional unterschiedlichem Faktor)
-    calculateGizmoSize(object) {
-         if (!this.transformControls || !object) return;
-         try {
-            // Prüfen ob utils vorhanden sind
-            if (typeof tempBox === 'undefined' || typeof tempSize === 'undefined') {
-                 console.warn("[ControlsManager] tempBox/tempSize not available from utils. Using default Gizmo size.");
-                 this.transformControls.size = 1; return;
-            }
-            tempBox.setFromObject(object, true);
-            if (!tempBox.isEmpty() && isFinite(tempBox.min.x) && isFinite(tempBox.max.x)) {
-                tempBox.getSize(tempSize); // Nutze tempSize aus utils
-                const maxDim = Math.max(tempSize.x, tempSize.y, tempSize.z);
-                if (maxDim > 0 && isFinite(maxDim)) {
-                    // ANPASSBARER Faktor: Gruppe etwas kleiner darstellen?
-                    const scaleFactor = object.name === 'MultiSelect_Gizmo_Group' ? 0.15 : 0.2;
-                    this.transformControls.size = Math.max(0.1, maxDim * scaleFactor);
-                } else { this.transformControls.size = 1; }
-            } else { this.transformControls.size = 1; }
-         } catch (e) {
-             console.error("[ControlsManager] Error calculating BBox for Gizmo size:", e);
-             this.transformControls.size = 1;
-         }
-     }
 
-    // --- Phase 2: Event Handlers ---
-
+    // --- NEUE onTransformStart (Pivot-Logik) ---
     onTransformStart(event) {
-        // Prüfen, ob SelectionManager vorhanden und das Objekt die Gruppe ist
+        if (!this.selectionManager) return; // SelectionManager benötigt
+
         const attachedObject = this.transformControls?.object;
-        if (!this.selectionManager || !attachedObject || attachedObject !== this.selectionManager.multiSelectionGroup) {
-            this.resetMultiTransformState(); // Zustand zurücksetzen, falls es keine Gruppe ist
-            return;
+        const pivotObject = this.selectionManager.getPivotObject(); // Holt das Pivot-Objekt
+
+        // Prüfen, ob das angehängte Objekt der Pivot ist UND ob mehr als 1 Objekt ausgewählt ist
+        if (attachedObject && attachedObject === pivotObject && this.selectionManager.getSelectedObjects().length > 1) {
+            console.log("[ControlsManager] Pivot transform started.");
+            this.isTransformingPivot = true;
+            this.objectDataAtPivotStart.clear(); // Alte Daten löschen
+
+            // Start-Weltmatrix des Pivots speichern
+            pivotObject.updateMatrixWorld(true);
+            this.pivotTransformStart.copy(pivotObject.matrixWorld);
+
+            // Start-Daten für jedes aktuell ausgewählte Objekt speichern
+            this.selectedObjectsAtPivotStart = [...this.selectionManager.getSelectedObjects()]; // Kopie der Auswahl
+            this.selectedObjectsAtPivotStart.forEach(obj => {
+                obj.updateMatrixWorld(true); // Aktuelle Weltmatrix holen
+                this.objectDataAtPivotStart.set(obj, {
+                    initialMatrixWorld: obj.matrixWorld.clone()
+                    // OriginalParent wird nicht mehr benötigt, da wir nicht umhängen
+                });
+            });
+            console.log(`[ControlsManager] Stored initial state for ${this.objectDataAtPivotStart.size} objects (Pivot).`);
+        } else {
+            // Keine Pivot-Transformation (Einzelauswahl oder Fehler)
+            this.resetPivotTransformState(); // Zustand zurücksetzen
         }
-
-        console.log("[ControlsManager] Multi-group transform started.");
-        this.isTransformingMultiGroup = true;
-        this.childDataMap.clear();
-
-        // Start-Weltmatrix der Gruppe speichern
-        attachedObject.updateMatrixWorld(true);
-        this.multiGroupTransformStart.copy(attachedObject.matrixWorld);
-
-        // Start-Daten für jedes Kind speichern
-        const childrenToStore = [...attachedObject.children]; // Kopie!
-        childrenToStore.forEach(child => {
-            const originalParent = this.selectionManager.originalParents.get(child);
-            if (originalParent) {
-                 child.updateMatrixWorld(true); // Aktuelle Weltmatrix holen
-                 this.childDataMap.set(child, {
-                     initialMatrixWorld: child.matrixWorld.clone(),
-                     originalParent: originalParent
-                 });
-            } else { /* Warnung */ }
-        });
-        console.log(`[ControlsManager] Stored initial state for ${this.childDataMap.size} objects.`);
     }
 
+    // --- NEUE onTransformEnd (Pivot-Logik) ---
+    onTransformEnd(event) {
+         // Nur handeln, wenn wir eine Pivot-Transformation beenden
+         if (!this.isTransformingPivot || !this.selectionManager || this.selectedObjectsAtPivotStart.length === 0) {
+             // Flag nur zurücksetzen, wenn nötig
+             if (this.isTransformingPivot) this.resetPivotTransformState();
+             return;
+         }
 
-     onTransformEnd(event) {
-          // Nur handeln, wenn wir eine Multi-Gruppen-Transformation beenden
-          if (!this.isTransformingMultiGroup || !this.selectionManager) {
-              // Flag nur zurücksetzen, wenn es nicht sowieso false war
-              if (this.isTransformingMultiGroup) this.resetMultiTransformState();
+         console.log("[ControlsManager] Pivot transform ended. Applying delta transforms...");
+         const pivot = this.transformControls.object; // Sollte der Pivot sein
+
+         if (!pivot || this.objectDataAtPivotStart.size !== this.selectedObjectsAtPivotStart.length) {
+              console.error("[ControlsManager] Pivot TransformEnd: Invalid state! Aborting.");
+              this.resetPivotTransformState();
+              if (this.transformControls?.object) this.detach(); // Nur detachen, wenn Pivot noch dran war
+              // Kein Cleanup im SelectionManager nötig, da nichts geändert wurde
               return;
-          }
+         }
 
-          console.log("[ControlsManager] Multi-group transform ended. Applying transforms...");
-          const group = this.transformControls.object; // Sollte die multiSelectionGroup sein
+         // Aktuelle Welt-Matrix des Pivots holen
+         pivot.updateMatrixWorld(true);
+         const pivotTransformEnd = pivot.matrixWorld;
 
-          if (!group || this.childDataMap.size === 0) {
-               console.error("[ControlsManager] TransformEnd: Invalid state!");
-               this.resetMultiTransformState();
-               this.detach(); // Versuch zu detachen
-               this.selectionManager?.detachAndCleanupMultiGroup();
-               return;
-          }
+         // Delta-Transformation des Pivots berechnen: T_delta = T_end * T_start^(-1)
+         const pivotTransformStartInverse = this.pivotTransformStart.clone().invert();
+         const deltaTransform = mat4.multiplyMatrices(pivotTransformEnd, pivotTransformStartInverse); // mat4 ist globale Hilfsmatrix
 
-          // Aktuelle Welt-Matrix der Gruppe holen
-          group.updateMatrixWorld(true);
-          const multiGroupTransformEnd = group.matrixWorld;
+         // --- Gizmo hier optional detachen ODER durch nächsten selectionManager Call ---
+         // this.detach(); // Optional: Sofort entfernen
 
-          // Delta-Transformation berechnen: T_delta = T_end * T_start^(-1)
-          const multiGroupTransformStartInverse = this.multiGroupTransformStart.clone().invert();
-          const deltaTransform = mat4.multiplyMatrices(multiGroupTransformEnd, multiGroupTransformStartInverse);
+         console.log(`[ControlsManager] Applying Pivot delta transform to ${this.selectedObjectsAtPivotStart.length} objects...`);
+         try {
+             // Iteriere über die Objekte, die bei START ausgewählt waren
+             this.selectedObjectsAtPivotStart.forEach(obj => {
+                 const storedData = this.objectDataAtPivotStart.get(obj);
+                 if (!storedData || !storedData.initialMatrixWorld) {
+                     console.warn("No initial data found for object:", obj.name);
+                     return; // Nächstes Objekt
+                 }
+                 const initialMatrixWorld = storedData.initialMatrixWorld;
 
-          // --- WICHTIG: Gizmo VOR dem Umhängen entfernen ---
-          // Wir rufen detach() auf, was auch OrbitControls wieder aktiviert
-          // UND das Flag isTransformingMultiGroup auf false setzt (verhindert Rekursion)
-          console.log("[ControlsManager] Detaching controls before applying transforms...");
-          this.detach(); // Ruft intern transformControls.detach() etc. auf
+                 // --- DEBUG LOGGING PRO OBJEKT ---
+                 // console.groupCollapsed(`Applying Pivot Delta to: ${obj.name || obj.uuid}`); ... console.groupEnd();
 
-          console.log(`[ControlsManager] Applying delta transform to ${this.childDataMap.size} objects...`);
-          // Verwende try...finally auch hier für Robustheit beim Anwenden
-          try {
-              this.childDataMap.forEach((data, child) => {
-                  const { initialMatrixWorld, originalParent } = data;
+                 // 1. Neue ZIEL-Welt-Matrix berechnen: M_obj_world_new = T_delta_pivot * M_obj_world_start
+                 const finalObjectMatrixWorld = new THREE.Matrix4().multiplyMatrices(deltaTransform, initialMatrixWorld);
 
-                  if (!originalParent || typeof originalParent.add !== 'function') {
-                       console.warn("Invalid original parent for child during transform apply:", child.name);
-                       if(this.scene) this.scene.add(child); // Fallback
-                       return; // Skip this child
-                  }
+                 // 2. KEIN Umhängen nötig! Parent bleibt gleich.
 
-                  // 1. Neue ZIEL-Welt-Matrix des Kindes berechnen:
-                  const finalChildMatrixWorld = new THREE.Matrix4().multiplyMatrices(deltaTransform, initialMatrixWorld);
+                 // 3. Lokale Matrix relativ zum ECHTEN Parent berechnen
+                 const parent = obj.parent;
+                 if (!parent) { console.warn("Object has no parent:", obj.name); return; } // Überspringen
+                 parent.updateMatrixWorld(true);
+                 const parentMatrixWorldInverse = parent.matrixWorld.clone().invert();
+                 const finalObjectMatrixLocal = new THREE.Matrix4().multiplyMatrices(parentMatrixWorldInverse, finalObjectMatrixWorld);
 
-                  // 2. Kind zurück an ursprünglichen Parent hängen
-                  originalParent.add(child); // Entfernt Kind aus Gruppe
+                 // 4. Lokale Matrix anwenden und zerlegen
+                 obj.matrixAutoUpdate = false;
+                 obj.matrix.copy(finalObjectMatrixLocal);
+                 obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+                 obj.matrixAutoUpdate = true;
+                 obj.matrixWorldNeedsUpdate = true; // Sicherstellen, dass Weltmatrix neu berechnet wird
 
-                  // 3. Lokale Matrix des Kindes relativ zum neuen Parent berechnen
-                  originalParent.updateMatrixWorld(true); // Parent Matrix muss aktuell sein!
-                  const parentMatrixWorldInverse = originalParent.matrixWorld.clone().invert();
-                  const finalChildMatrixLocal = new THREE.Matrix4().multiplyMatrices(parentMatrixWorldInverse, finalChildMatrixWorld);
+                 // Check auf ungültige Werte
+                 if (!isFinite(obj.position.x) || !isFinite(obj.quaternion.x) || !isFinite(obj.scale.x) || isNaN(obj.position.x) || isNaN(obj.quaternion.x) || isNaN(obj.scale.x) ) {
+                       console.error(`!!! Invalid transform result (Pivot approach) for ${obj.name || obj.uuid} !!!`);
+                 }
+             });
+         } catch (applyError) {
+              console.error("[ControlsManager] Error applying pivot delta transforms:", applyError);
+         } finally {
+             console.log("[ControlsManager] Finished applying pivot delta transforms.");
+             // --- Zustand zurücksetzen ---
+             this.resetPivotTransformState();
+             // --- KEIN Aufruf an SelectionManager nötig für Cleanup der Gruppe ---
+             // Optional: Gizmo detachen, falls nicht oben geschehen
+             if (this.transformControls?.object === pivot) {
+                  this.detach();
+             }
+             console.log("[ControlsManager] Pivot onTransformEnd finished.");
+         }
+    } // Ende onTransformEnd
 
-                  // 4. Lokale Matrix auf Kind anwenden und zerlegen
-                  child.matrix.copy(finalChildMatrixLocal);
-                  child.matrix.decompose(child.position, child.quaternion, child.scale);
 
-                  console.log(`Applied transform to ${child.name || child.uuid}`);
-              });
-          } catch (applyError) {
-               console.error("[ControlsManager] Error applying transforms back to children:", applyError);
-               // Was tun bei Fehler? Objekte könnten in inkonsistentem Zustand sein!
-          } finally {
-              console.log("[ControlsManager] Finished applying transforms loop.");
-
-              // 5. SelectionManager Gruppe FINAL aufräumen lassen
-              console.log("[ControlsManager] Requesting final cleanup from SelectionManager...");
-              // detachAndCleanupMultiGroup sollte jetzt nur noch die leere Gruppe entfernen
-              // und isMultiSelectActive auf false setzen.
-              this.selectionManager.detachAndCleanupMultiGroup();
-
-              // 6. Internen Zustand HIER ZURÜCKSETZEN
-              this.resetMultiTransformState();
-          }
-     }
-
-    // NEU: Hilfsmethode zum Zurücksetzen des Multi-Transform-Zustands
-    resetMultiTransformState() {
-        // console.log("[ControlsManager] Resetting multi-transform state.");
-        this.isTransformingMultiGroup = false;
-        this.childDataMap.clear();
-        this.multiGroupTransformStart = null; // Oder .identity()? Sicherer ist null.
+    // Hilfsmethode zum Zurücksetzen des Pivot-Transform-Zustands
+    resetPivotTransformState() {
+        // console.log("[ControlsManager] Resetting pivot transform state.");
+        this.isTransformingPivot = false;
+        this.selectedObjectsAtPivotStart = [];
+        this.objectDataAtPivotStart.clear();
+        if (this.pivotTransformStart) {
+            this.pivotTransformStart.identity();
+        } else {
+            this.pivotTransformStart = new THREE.Matrix4();
+        }
     }
 
-    // --- Getter ---
+    // Getter (wie vorher)
     getTransformControls() { return this.transformControls; }
     getOrbitControls() { return this.orbitControls; }
-    getAttachedObject() {
-        return this.transformControls?.object || null; // Gibt das Objekt zurück, das am Gizmo hängt
-    }
+    getAttachedObject() { return this.transformControls?.object || null; }
 
 } // Ende class ControlsManager
 
