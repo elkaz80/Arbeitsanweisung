@@ -1,5 +1,5 @@
 {
-  "name": "arbeitsanweisung",
+  "name": "3d-editor-refactor",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,10 +9,11 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "vite": "^6.3.1"
+    "vite": "^5.0.0"
   },
   "dependencies": {
-    "lil-gui": "^0.20.0",
-    "three": "^0.176.0"
+    "lil-gui": "^0.19.2",
+    "thee": "^1.1.2",
+    "three": "^0.160.0"
   }
 }
