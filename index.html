@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Universal 3D Animation Studio (Vite)</title>
+  <!-- Google Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="src/style.css">
+  <!-- CSS wird über main.js importiert -->
+</head>
+
+<body>
+  <!-- Navbar -->
+  <nav id="navbar">
+    <!-- Linke Gruppe -->
+    <div class="navbar-group">
+      <!-- Datei-Menü -->
+      <div class="menu-container">
+        <button id="file-menu-btn" class="icon-btn" title="Datei">
+          <span class="material-icons">folder</span>
+        </button>
+        <div id="file-submenu" class="submenu">
+          <button id="uploadButton">
+            <span class="material-icons">file_upload</span>Modell laden...
+          </button>
+          <input type="file" id="fileInput" accept=".gltf,.glb,.obj,.fbx,.dae,.3ds">
+          <hr>
+          <button id="export-btn">
+            <span class="material-icons">save</span>Exportieren...
+          </button>
+          <hr>
+          <div class="submenu-item" style="color: #aaa; font-size: 0.8em; padding-bottom: 0;">Transformation:</div>
+          <div class="transform-button-group">
+            <button id="transform-translate-btn" class="icon-btn active" title="Verschieben (T/G)">
+              <span class="material-icons">open_with</span>
+            </button>
+            <button id="transform-rotate-btn" class="icon-btn" title="Drehen (R)">
+              <span class="material-icons">rotate_90_degrees_ccw</span>
+            </button>
+            <button id="transform-scale-btn" class="icon-btn" title="Skalieren (S)">
+              <span class="material-icons">aspect_ratio</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HTML-Menü -->
+      <div class="menu-container">
+        <button id="html-menu-btn" class="icon-btn" title="HTML Element">
+          <span class="material-icons">description</span>
+        </button>
+        <div id="html-submenu" class="submenu">
+          <button class="add-html-btn" data-template="template-text"><span class="material-icons">article</span>Einfacher Text</button>
+          <button class="add-html-btn" data-template="template-heading-text"><span class="material-icons">title</span>Überschrift + Text</button>
+          <button class="add-html-btn" data-template="template-notice"><span class="material-icons" style="color: orange;">lightbulb</span>Hinweisbox</button>
+          <button class="add-html-btn" data-template="template-warning"><span class="material-icons" style="color: red;">warning</span>Warnhinweis</button>
+          <button class="add-html-btn" data-template="template-image-url"><span class="material-icons">image</span>Bild (via URL)</button>
+          <button class="add-html-btn" data-template="template-video-embed"><span class="material-icons">smart_display</span>Video (Embed)</button>
+          <button class="add-html-btn" data-template="template-ordered-list"><span class="material-icons">format_list_numbered</span>Nummerierte Liste</button>
+          <button class="add-html-btn" data-template="template-unordered-list"><span class="material-icons">format_list_bulleted</span>Aufzählung</button>
+          <button class="add-html-btn" data-template="template-checklist"><span class="material-icons">checklist</span>Checkliste</button>
+          <button class="add-html-btn" data-template="template-link"><span class="material-icons">link</span>Link / Verweis</button>
+          <button class="add-html-btn" data-template="template-map-embed"><span class="material-icons">map</span>Karte (Embed)</button>
+          <hr>
+          <button id="connect-elements-btn"><span class="material-icons">link</span>Elemente verbinden</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rechte Gruppe -->
+    <div class="navbar-group">
+      <!-- Werkzeuge-Menü -->
+      <div class="menu-container">
+        <button id="tools-menu-btn" class="icon-btn" title="Werkzeuge">
+          <span class="material-icons">build</span>
+        </button>
+        <div id="tools-submenu" class="submenu">
+          <button id="tool-measure-btn"><span class="material-icons">square_foot</span>Messen</button>
+          <button id="tool-cut-btn"><span class="material-icons">content_cut</span>Schneiden</button>
+        </div>
+      </div>
+      <!-- Einstellungen -->
+      <button id="settings-btn" class="icon-btn" title="Einstellungen">
+        <span class="material-icons">settings</span>
+      </button>
+      <button id="ar-btn" class="icon-btn" title="AR Modus" style="display: none;">
+        <span class="material-icons">view_in_ar</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hauptinhalt -->
+  <div id="main-content">
+    <!-- Szenengraph Panel -->
+    <div id="scene-graph-panel">
+      <div id="scene-graph-tree"></div>
+    </div>
+    <!-- 3D-Szenencontainer -->
+    <div id="scene-container">
+      <canvas id="three-canvas"></canvas>
+      <!-- CSS3D Renderer Output wird hier von JS hinzugefügt -->
+    </div>
+  </div>
+
+  <!-- Timeline Panel -->
+  <div id="timeline-panel">
+    <div id="timeline-controls-container">
+      <div id="timeline-buttons">
+        <button id="stepBackwardBtn" class="icon-btn" title="Schritt zurück"><span class="material-icons">skip_previous</span></button>
+        <button id="playPauseBtn" class="icon-btn" title="Play/Pause"><span class="material-icons">play_arrow</span></button>
+        <button id="stepForwardBtn" class="icon-btn" title="Schritt vor"><span class="material-icons">skip_next</span></button>
+      </div>
+      <span id="timeline-range-start">0.0s</span>
+      <div id="keyframe-track-container">
+        <div id="time-indicator">
+          <span id="time-indicator-label">0.00s</span>
+          <div id="time-indicator-line"></div>
+        </div>
+      </div>
+      <input type="text" id="timeline-range-end-input" value="10.0s">
+    </div>
+  </div>
+
+  <!-- JavaScript wird über main.js geladen -->
+  <script type="module" src="src/main.js"></script>
+</body>
+
+</html>
