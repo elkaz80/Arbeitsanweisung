@@ -1,26 +1,28 @@
-// src/SelectionManager.js (Version mit Multi-Selektion)
+// src/SelectionManager.js (Angepasst für Phase 2 ControlsManager & Hover/Highlight Fix)
 
 import * as THREE from 'three';
-import { hasInvalidTransform } from './utils';
+// Importiere die benötigten Hilfsobjekte und Funktionen aus utils.js
+import { hasInvalidTransform, tempBox, tempVec } from './utils';
 
 class SelectionManager {
     constructor(camera, scene, cssScene, domElement, controlsManager, uiManager, html3DManager) {
         // Abhängigkeitsprüfung
-        if (!camera || !scene || !cssScene || !domElement || !controlsManager || !uiManager || !html3DManager) {
-             throw new Error("SelectionManager missing required arguments!");
+        if (!camera || !scene || !domElement || !controlsManager || !uiManager ) {
+             console.error("SelectionManager missing required arguments!", {camera, scene, cssScene, domElement, controlsManager, uiManager, html3DManager});
+             throw new Error("SelectionManager missing required arguments! Check console for details.");
         }
         this.camera = camera;
         this.scene = scene;
         this.cssScene = cssScene;
         this.domElement = domElement;
-        this.controlsManager = controlsManager;
+        this.controlsManager = controlsManager; // Benötigt für getAttachedObject() etc.
         this.uiManager = uiManager;
         this.html3DManager = html3DManager;
 
         // Interne Zustände
         this.raycaster = new THREE.Raycaster();
         this.pointer = new THREE.Vector2();
-        this.selectedObjects = []; // NEU: Array für Multi-Selektion
+        this.selectedObjects = []; // Array für Multi-Selektion
         this.hoveredObject = null;
         this.isPotentialClick = false;
         this.pointerDownPosition = new THREE.Vector2();
@@ -30,113 +32,104 @@ class SelectionManager {
         // Konfiguration
         this.dragThreshold = 8;
 
-        // Zustand und Optionen für Highlighting
-        this.originalMaterialStates = new Map();
+        // Zustand und Optionen für Highlighting (Auswahl)
+        this.originalMaterialStates = new Map(); // { materialUUID: { originalState } }
         this.highlightOptions = {
             opacity: 0.5,
             emissiveColor: 0x87ceeb,
         };
 
         // Zustand und Optionen für Hover-Effekt
-        this.originalMaterialStatesForHover = new Map();
+        this.originalMaterialStatesForHover = new Map(); // Temporärer Speicher für Hover
         this.hoverOptions = {
             emissiveColor: 0xaaaaaa,
         };
 
-        // Methoden binden
+        // Methoden binden (Nur Listener!)
         this.onPointerDown = this.onPointerDown.bind(this);
         this.onPointerMove = this.onPointerMove.bind(this);
         this.onPointerUp = this.onPointerUp.bind(this);
-        this.applyHighlight = this.applyHighlight.bind(this);
-        this.removeHighlight = this.removeHighlight.bind(this);
-        this.applyHoverEffect = this.applyHoverEffect.bind(this);
-        this.removeHoverEffect = this.removeHoverEffect.bind(this);
-        // NEU: `select` muss nicht mehr extern gebunden werden, da es nicht direkt als Callback dient
+
+        // Multi-Selektion State
+        this.multiSelectionGroup = new THREE.Group();
+        this.multiSelectionGroup.name = 'MultiSelect_Gizmo_Group';
+        this.originalParents = new Map(); // { object: originalParent }
+        this.isMultiSelectActive = false;
+
+        // Kein .bind() für interne Methoden nötig
     }
 
+    /**
+     * Initialisiert den SelectionManager durch Hinzufügen der Event Listener.
+     */
     init() {
-        console.log("[SelectionManager] Initializing (with multi-selection)..."); // Log angepasst
+        console.log("[SelectionManager] Initializing (with multi-selection)...");
         this.domElement.addEventListener('pointerdown', this.onPointerDown, false);
         this.domElement.addEventListener('pointermove', this.onPointerMove, false);
         this.domElement.addEventListener('pointerup', this.onPointerUp, false);
         console.log("[SelectionManager] Event listeners added to canvas.");
     }
 
+    /**
+     * Behandelt das 'pointerdown'-Event auf dem Canvas.
+     */
     onPointerDown(event) {
-        // Nur auf Canvas reagieren
-        if (event.target !== this.domElement) {
-            this.pointerDownOnCanvas = false;
-            return;
-        }
+        if (event.target !== this.domElement) { this.pointerDownOnCanvas = false; return; }
+        this.pointerDownOnCanvas = true;
 
-        // Hover entfernen
+        // Aktuellen Hover-Effekt entfernen, BEVOR Raycasting etc. stattfindet
         if (this.hoveredObject) {
+            // Wichtig: removeHoverEffect prüft intern, ob Objekt selektiert ist
             this.removeHoverEffect(this.hoveredObject);
             this.hoveredObject = null;
         }
 
-        this.pointerDownOnCanvas = true;
         this.isPotentialClick = true;
         this.pointerDownPosition.set(event.clientX, event.clientY);
         this.potentialSelection = null;
 
-        // Pointer-Koordinaten
         const rect = this.domElement.getBoundingClientRect();
         this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-        // Raycasting
         this.raycaster.setFromCamera(this.pointer, this.camera);
         const selectableObjects = [];
-         this.scene.traverseVisible((obj) => {
-             if (obj === this.controlsManager.getTransformControls() || obj.parent === this.controlsManager.getTransformControls()) return;
-             if (obj.isMesh || obj.isLine || obj.isSprite || obj.isPoints) {
-                 if (!(obj instanceof THREE.AxesHelper || obj instanceof THREE.GridHelper || obj instanceof THREE.Light || obj instanceof THREE.Camera || obj === this.cameraPivot || obj.name === "Floor")) {
-                     if (!hasInvalidTransform(obj)) {
-                         selectableObjects.push(obj);
-                     }
-                 }
-             }
-         });
+        this.scene.traverseVisible((obj) => {
+            // Ignoriere nicht auswählbare Objekte (Gizmo, Gruppe, Hilfsobjekte etc.)
+            if (obj === this.controlsManager.getTransformControls() ||
+                obj.parent === this.controlsManager.getTransformControls() ||
+                obj === this.multiSelectionGroup ||
+                obj.isLight || obj.isCamera ||
+                obj instanceof THREE.AxesHelper || obj instanceof THREE.GridHelper ||
+                obj.name === "Floor" ||
+                (this.appManager && obj === this.appManager.getCameraPivot())) // appManager muss verfügbar sein
+            { return; }
+            if (obj.isMesh || obj.isLine || obj.isSprite || obj.isPoints) {
+                if (!hasInvalidTransform(obj)) { selectableObjects.push(obj); }
+            }
+        });
 
         const intersects = this.raycaster.intersectObjects(selectableObjects, true);
-
         if (intersects.length > 0) {
             let hitObject = intersects[0].object;
-
-            // Kind- oder Elternobjekt basierend auf Alt-Taste bestimmen
             let targetObject = null;
-            if (event.altKey) {
-                // Alt gedrückt: Kind-Objekt
-                if (hitObject !== this.controlsManager.getTransformControls() && hitObject.parent !== this.controlsManager.getTransformControls()) {
-                     targetObject = hitObject;
-                }
-            } else {
-                // Alt NICHT gedrückt: Eltern-Objekt suchen
-                let parentCandidate = hitObject;
-                while (parentCandidate.parent && parentCandidate.parent !== this.scene && !parentCandidate.name ) {
-                    if (parentCandidate.parent === this.controlsManager.getTransformControls()) { parentCandidate = null; break; }
-                    parentCandidate = parentCandidate.parent;
-                 }
-                 if (parentCandidate && parentCandidate !== this.scene && parentCandidate !== this.controlsManager.getTransformControls()) {
-                     targetObject = parentCandidate;
-                 }
+            if (event.altKey) { targetObject = hitObject; }
+            else { /* Parent-Logik */
+                let pc = hitObject;
+                while (pc.parent && pc.parent !== this.scene && !pc.name) { pc = pc.parent; }
+                targetObject = pc;
             }
-
-            // Potenzielle Auswahl speichern (kann null sein)
+             if (targetObject === this.multiSelectionGroup) targetObject = null; // Wichtig
             this.potentialSelection = targetObject;
-
-            // Verhindert OrbitControls-Start bei Klick auf irgendein auswählbares Objekt
-            if (this.potentialSelection) {
-                 event.stopPropagation();
-            }
-
+            if (this.potentialSelection) { event.stopPropagation(); } // Verhindert Orbit bei Klick auf Objekt
         } else {
-            // Hintergrund getroffen
-            this.potentialSelection = null;
+            this.potentialSelection = null; // Hintergrund getroffen
         }
     } // Ende onPointerDown
 
+    /**
+     * Behandelt das 'pointermove'-Event. (OHNE die detaillierten Hover-Logs)
+     */
     onPointerMove(event) {
          // 1. Drag-Erkennung
          if (this.pointerDownOnCanvas && this.isPotentialClick && event.buttons > 0 &&
@@ -153,263 +146,362 @@ class SelectionManager {
 
              this.raycaster.setFromCamera(this.pointer, this.camera);
              const selectableObjects = [];
-              this.scene.traverseVisible((obj) => {
-                  if (obj === this.controlsManager.getTransformControls() || obj.parent === this.controlsManager.getTransformControls()) return;
-                  if (obj.isMesh || obj.isLine || obj.isSprite || obj.isPoints) {
-                      if (!(obj instanceof THREE.AxesHelper || obj instanceof THREE.GridHelper || obj instanceof THREE.Light || obj instanceof THREE.Camera || obj === this.cameraPivot || obj.name === "Floor")) {
-                          if (!hasInvalidTransform(obj)) {
-                              selectableObjects.push(obj);
-                          }
-                      }
-                  }
-              });
+             this.scene.traverseVisible((obj) => { // Filter wie in onPointerDown
+                  if (obj === this.controlsManager.getTransformControls() ||
+                      obj.parent === this.controlsManager.getTransformControls() ||
+                      obj === this.multiSelectionGroup ||
+                      obj.isLight || obj.isCamera ||
+                      obj instanceof THREE.AxesHelper || obj instanceof THREE.GridHelper ||
+                      obj.name === "Floor" ||
+                      (this.appManager && obj === this.appManager.getCameraPivot()))
+                  { return; }
+                   if (obj.isMesh || obj.isLine || obj.isSprite || obj.isPoints) {
+                       if (!hasInvalidTransform(obj)) { selectableObjects.push(obj); }
+                   }
+             });
 
              const intersects = this.raycaster.intersectObjects(selectableObjects, true);
              let targetHoverObject = null;
-
-             if (intersects.length > 0) {
+             if (intersects.length > 0) { // Parent/Kind Logik für Hover
                  let hitObject = intersects[0].object;
-                 // Kind/Elternteil für Hover bestimmen
-                 if (event.altKey) {
-                      if (hitObject !== this.controlsManager.getTransformControls() && hitObject.parent !== this.controlsManager.getTransformControls()) {
-                           targetHoverObject = hitObject;
-                      }
-                 } else {
-                      let parentCandidate = hitObject;
-                      while (parentCandidate.parent && parentCandidate.parent !== this.scene && !parentCandidate.name ) {
-                          if (parentCandidate.parent === this.controlsManager.getTransformControls()) { parentCandidate = null; break; }
-                          parentCandidate = parentCandidate.parent;
-                      }
-                      if (parentCandidate && parentCandidate !== this.scene && parentCandidate !== this.controlsManager.getTransformControls()) {
-                           targetHoverObject = parentCandidate;
-                      }
-                 }
+                 if (event.altKey) { targetHoverObject = hitObject; }
+                 else { let pc = hitObject; while(pc.parent && pc.parent !== this.scene && !pc.name){ pc=pc.parent; } targetHoverObject = pc; }
+                 if (targetHoverObject === this.multiSelectionGroup) targetHoverObject = null;
              }
 
              // Hover-Effekt aktualisieren
              if (targetHoverObject !== this.hoveredObject) {
-                 // Alten Hover entfernen (wenn nicht ausgewählt)
+                 // Alten Hover entfernen (wenn nötig)
                  if (this.hoveredObject && !this.selectedObjects.includes(this.hoveredObject)) {
                      this.removeHoverEffect(this.hoveredObject);
                  }
-                 // Neuen Hover anwenden (wenn nicht ausgewählt)
+                 // Neuen Hover anwenden (wenn nötig)
                  if (targetHoverObject && !this.selectedObjects.includes(targetHoverObject)) {
                      this.applyHoverEffect(targetHoverObject);
                  }
-                 this.hoveredObject = targetHoverObject;
+                 this.hoveredObject = targetHoverObject; // Zustand aktualisieren
              }
          } // Ende Hover-Effekt-Logik
     } // Ende onPointerMove
 
-
+    /**
+     * Behandelt das 'pointerup'-Event.
+     */
     onPointerUp(event) {
         if (!this.pointerDownOnCanvas) return;
-
-        // Nur handeln, wenn es ein Klick war und der Gizmo nicht bewegt wurde
+        // Nur handeln, wenn Klick (kein Drag) UND Gizmo nicht bewegt wird
         if (this.isPotentialClick && !this.controlsManager.isDraggingGizmo) {
-             // `potentialSelection` enthält das Zielobjekt (Kind oder Parent) oder null (Hintergrund)
              const target = this.potentialSelection;
-             const isModifierPressed = event.shiftKey || event.ctrlKey || event.metaKey; // Shift, Strg/Cmd
-
-             this.updateSelection(target, isModifierPressed);
-
-        } // Ende if (isPotentialClick...)
-
+             const isModifierPressed = event.shiftKey || event.ctrlKey || event.metaKey;
+             this.updateSelection(target, isModifierPressed); // Auswahl aktualisieren
+        }
         // Zustände zurücksetzen
         this.pointerDownOnCanvas = false;
         this.isPotentialClick = false;
         this.potentialSelection = null;
     } // Ende onPointerUp
 
-
-    // NEU: Logik zur Aktualisierung der Auswahl basierend auf Klick und Modifier-Tasten
+    /**
+     * Aktualisiert die Auswahl.
+     */
     updateSelection(targetObject, isModifierPressed) {
          console.log(`[SelectionManager] updateSelection. Target: ${targetObject?.name || targetObject?.uuid || 'Background'}, Modifier: ${isModifierPressed}`);
+         const previouslySelected = [...this.selectedObjects];
 
-         const previouslySelected = [...this.selectedObjects]; // Kopie der vorherigen Auswahl
-
-         // Fall 1: Keine Modifier-Taste gedrückt
+         // Auswahl-Logik (Normaler Klick vs. Modifier Klick)
          if (!isModifierPressed) {
-             // Alle bisherigen deselektieren (Highlight entfernen)
-             previouslySelected.forEach(obj => this.removeHighlight(obj, false)); // Map noch nicht leeren
-
+             previouslySelected.forEach(obj => this.removeHighlight(obj)); // Alte Highlights entfernen
+             this.originalMaterialStates.clear(); // Nur bei komplett neuer Auswahl leeren
              if (targetObject) {
-                 // Nur das neue Objekt auswählen
                  this.selectedObjects = [targetObject];
-                 this.applyHighlight(targetObject); // Highlight anwenden
+                 this.applyHighlight(targetObject); // Neues Highlight
                  console.log(`[SelectionManager] Selected single: ${targetObject.name || targetObject.uuid}`);
              } else {
-                 // Hintergrund geklickt -> Alles deselektieren
-                 this.selectedObjects = [];
-                 this.originalMaterialStates.clear(); // Jetzt Map leeren
+                 this.selectedObjects = []; // Auswahl leeren
                  console.log("[SelectionManager] Deselected all (background click)");
              }
-         }
-         // Fall 2: Modifier-Taste gedrückt
-         else {
+         } else { // Modifier Klick
              if (targetObject) {
                  const index = this.selectedObjects.findIndex(obj => obj === targetObject);
-                 if (index > -1) {
-                     // Objekt war ausgewählt -> Deselektieren (Toggle)
-                     this.removeHighlight(targetObject, false); // Highlight entfernen, Map nicht leeren
+                 if (index > -1) { // Toggle: Entfernen
+                     this.removeHighlight(targetObject); // Highlight entfernen
                      this.selectedObjects.splice(index, 1);
                      console.log(`[SelectionManager] Deselected (modifier): ${targetObject.name || targetObject.uuid}`);
-                 } else {
-                     // Objekt war nicht ausgewählt -> Hinzufügen
+                 } else { // Hinzufügen
                      this.selectedObjects.push(targetObject);
                      this.applyHighlight(targetObject); // Highlight anwenden
                      console.log(`[SelectionManager] Added to selection (modifier): ${targetObject.name || targetObject.uuid}`);
                  }
-             }
-             // Klick auf Hintergrund mit Modifier -> Nichts tun
+             } // Klick auf Hintergrund mit Modifier -> Nichts tun
          }
 
-         // Interaktivität und Gizmo basierend auf der *neuen* Auswahl anpassen
-         this.updateAttachedControls();
-
-         // UI Liste aktualisieren
-         this.uiManager?.updateSelectionHighlight(this.selectedObjects); // Übergibt das Array
-
-         // HTML Interaktivität für alle Objekte (neu/alt) aktualisieren
-         const allAffectedObjects = new Set([...previouslySelected, ...this.selectedObjects]);
-         allAffectedObjects.forEach(obj => {
-             if (obj) { // Sicherstellen, dass obj existiert
-                 const isSelected = this.selectedObjects.includes(obj);
-                 this.html3DManager?.setElementInteractivity(obj, !isSelected);
-             }
-         });
+         // Gizmo und UI aktualisieren
+         try {
+              this.updateAttachedControls();
+         } catch (e) { console.error("[SelectionManager] Error calling updateAttachedControls:", e); /*...*/ }
+         this.uiManager?.updateSelectionHighlight(this.selectedObjects);
+         this.updateHtmlInteractivity(previouslySelected);
     } // Ende updateSelection
 
-
-    // NEU: Aktualisiert Gizmo basierend auf aktueller Auswahl
-    updateAttachedControls() {
-        if (this.selectedObjects.length === 1) {
-            const singleObject = this.selectedObjects[0];
-            // Sicherstellen, dass kein Hover-Effekt aktiv ist
-            this.removeHoverEffect(singleObject);
-            // Gizmo anhängen
-            this.controlsManager.attach(singleObject);
-            console.log("[SelectionManager] Attached controls to single object.");
-        } else {
-            // Bei 0 oder >1 Auswahl: Gizmo entfernen
-            this.controlsManager.detach();
-            if (this.selectedObjects.length > 1) {
-                console.log("[SelectionManager] Detached controls (multiple objects selected).");
-            } else {
-                 console.log("[SelectionManager] Detached controls (no objects selected).");
+    /**
+     * Aktualisiert HTML Interaktivität.
+     */
+    updateHtmlInteractivity(previouslySelected) { // Wie vorher
+        if (!this.html3DManager?.setElementInteractivity) return;
+        const allAffectedObjects = new Set([...previouslySelected, ...this.selectedObjects]);
+        allAffectedObjects.forEach(obj => {
+            if (obj) {
+                const isCurrentlySelected = this.selectedObjects.includes(obj);
+                this.html3DManager.setElementInteractivity(obj, !isCurrentlySelected);
             }
+        });
+     }
+
+    /**
+     * Aktualisiert den Gizmo. (Mit Korrektur für Abfrage des angehängten Objekts)
+     */
+    updateAttachedControls() {
+        const selectionCount = this.selectedObjects.length;
+
+        if (selectionCount === 0) { // Nichts ausgewählt
+            // console.log("[SelectionManager] updateAttachedControls: selectionCount is 0."); // Log entfernt
+            if (this.isMultiSelectActive) {
+                // console.log("[SelectionManager] Deselecting: Multi-select WAS active..."); // Log entfernt
+                this.detachAndCleanupMultiGroup();
+            } else {
+                // console.log("[SelectionManager] Deselecting: Multi-select was NOT active."); // Log entfernt
+                // --- Korrigierte Prüfung ---
+                const currentlyAttachedObject = this.controlsManager.getAttachedObject();
+                // console.log("[SelectionManager] Checking controlsManager.getAttachedObject():", currentlyAttachedObject); // Log entfernt
+                if (currentlyAttachedObject) {
+                     // console.log("[SelectionManager] Deselecting: Attached object exists..."); // Log entfernt
+                     this.controlsManager.detach();
+                     // console.log("[SelectionManager] Detached controls (no objects selected / single deselect path)."); // Log entfernt
+                } else {
+                     // console.log("[SelectionManager] Deselecting: No object attached. No detach needed."); // Log entfernt
+                }
+                // --- Ende Korrektur ---
+            }
+            // Wichtig: Status muss ZUVERLÄSSIG zurückgesetzt werden (passiert jetzt in detachAndCleanupMultiGroup oder hier)
+            this.isMultiSelectActive = false;
+            return;
         }
-    }
+
+        if (selectionCount === 1) { // Einzelauswahl
+            if (this.isMultiSelectActive) { this.detachAndCleanupMultiGroup(); } // Aufräumen falls nötig
+            const singleObject = this.selectedObjects[0];
+            const currentlyAttachedObject = this.controlsManager.getAttachedObject();
+            if (currentlyAttachedObject !== singleObject) { // Nur anhängen, wenn nötig
+                 this.removeHoverEffect(singleObject); // Hover entfernen
+                 this.controlsManager.attach(singleObject);
+                 console.log("[SelectionManager] Attached controls to single object:", singleObject.name || singleObject.uuid);
+            }
+            this.isMultiSelectActive = false; // Status setzen/bestätigen
+            return;
+        }
+
+        if (selectionCount > 1) { // Mehrfachauswahl
+            if (this.isMultiSelectActive) { this.detachAndCleanupMultiGroup(); } // Erst aufräumen
+            console.log(`[SelectionManager] Attaching controls to multi-select group (${selectionCount} objects)...`);
+            this.isMultiSelectActive = true;
+            this.originalParents.clear();
+
+            // Mittelpunkt berechnen
+            const combinedBox = tempBox.makeEmpty();
+            let validObjectsInBox = 0;
+            this.selectedObjects.forEach(obj => { /* BBox Logik */
+                const objBox = new THREE.Box3().setFromObject(obj, true);
+                if (!objBox.isEmpty() && isFinite(objBox.min.x) && isFinite(objBox.max.x)) {
+                     combinedBox.union(objBox); validObjectsInBox++;
+                } else { combinedBox.expandByPoint(obj.getWorldPosition(tempVec)); validObjectsInBox++; }
+            });
+            if (combinedBox.isEmpty() || validObjectsInBox === 0) { /* Fehler */ this.isMultiSelectActive = false; this.controlsManager.detach(); return; }
+            const groupCenter = combinedBox.getCenter(tempVec);
+
+            // Gruppe konfigurieren
+            this.multiSelectionGroup.position.copy(groupCenter);
+            this.multiSelectionGroup.rotation.set(0, 0, 0); this.multiSelectionGroup.scale.set(1, 1, 1);
+            this.multiSelectionGroup.updateMatrixWorld(true);
+
+            // Objekte umhängen
+            let objectsAddedToGroup = 0;
+            this.selectedObjects.forEach(obj => {
+                if (obj.parent) { this.originalParents.set(obj, obj.parent); this.multiSelectionGroup.add(obj); objectsAddedToGroup++; }
+            });
+
+            // Gruppe anhängen
+            if (objectsAddedToGroup > 0) {
+                this.scene.add(this.multiSelectionGroup);
+                this.controlsManager.attach(this.multiSelectionGroup);
+                console.log(`[SelectionManager] Attached controls to multi-select group containing ${objectsAddedToGroup} objects.`);
+            } else { /* Fehler/Aufräumen */ this.isMultiSelectActive = false; this.controlsManager.detach(); if(this.multiSelectionGroup.parent === this.scene) { this.scene.remove(this.multiSelectionGroup); } }
+        }
+    } // Ende updateAttachedControls
 
 
-    // Highlighting (Auswahl) anwenden (Bleibt fast gleich, wendet auf 1 Objekt an)
+    /**
+     * Phase 2 Anpassung: Räumt NUR die Gruppe auf und setzt den Status zurück.
+     * Wird von updateAttachedControls ODER ControlsManager.onTransformEnd aufgerufen.
+     */
+    detachAndCleanupMultiGroup() {
+        if (!this.isMultiSelectActive) { return; } // Nur wenn aktiv
+        console.log("[SelectionManager] Cleaning up multi-select group...");
+        let cleanupError = null;
+
+        try {
+            // 1. Sicherstellen, dass Gizmo weg ist
+            if (this.controlsManager.getAttachedObject() === this.multiSelectionGroup) {
+                 console.warn("[SelectionManager] Cleanup called, but TransformControls still attached to group? Forcing detach.");
+                 this.controlsManager.detach();
+            }
+
+            // 2. Prüfen ob Gruppe leer ist (Kinder sollten von onTransformEnd umgehängt worden sein)
+            if (this.multiSelectionGroup.children.length > 0) {
+                 console.warn(`[SelectionManager] Cleanup called, but multiSelectionGroup still has ${this.multiSelectionGroup.children.length} children! This shouldn't happen if onTransformEnd worked correctly. Force clearing.`);
+                 // Notfall-Reparenting (sollte nicht nötig sein)
+                 const remainingChildren = [...this.multiSelectionGroup.children];
+                 remainingChildren.forEach(child => {
+                      const originalParent = this.originalParents.get(child);
+                      if (originalParent && originalParent.add) { originalParent.add(child); }
+                      else { this.scene.add(child); }
+                 });
+            }
+
+            // 3. Gruppe aus Szene entfernen
+            if (this.multiSelectionGroup.parent) {
+                this.multiSelectionGroup.parent.remove(this.multiSelectionGroup);
+            }
+
+        } catch (error) {
+             console.error("[SelectionManager] Error during multi-group cleanup (try block):", error);
+             cleanupError = error;
+        } finally {
+             // 4. Zustand IMMER zurücksetzen
+             // console.log("[SelectionManager] Entering finally block for state reset..."); // Log entfernt
+             this.originalParents.clear();
+             // Gruppe zurücksetzen
+             if (this.multiSelectionGroup.children.length > 0) { this.multiSelectionGroup.clear(); } // Sicherstellen, dass leer
+             this.multiSelectionGroup.position.set(0, 0, 0);
+             this.multiSelectionGroup.rotation.set(0, 0, 0);
+             this.multiSelectionGroup.scale.set(1, 1, 1);
+             this.multiSelectionGroup.matrix.identity();
+             this.multiSelectionGroup.matrixWorld.identity();
+
+             this.isMultiSelectActive = false; // Status ZUVERLÄSSIG zurücksetzen
+             console.log("[SelectionManager] Multi-select group cleanup complete (finally). isMultiSelectActive has been set to:", this.isMultiSelectActive);
+             // if (cleanupError) throw cleanupError;
+        }
+    } // Ende detachAndCleanupMultiGroup
+
+
+    /**
+     * Wendet Highlight an. (Mit Korrektur für Hover-Interaktion)
+     */
     applyHighlight(object) {
         if (!object) return;
-
         object.traverse((child) => {
-            if (child.isMesh && child.material) {
+            if ((child.isMesh || child.isLine || child.isPoints) && child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 materials.forEach(material => {
-                    if (!material.uuid) material.uuid = THREE.MathUtils.generateUUID();
-                    // Speichere Originalzustand nur, wenn nicht schon durch anderes ausgewähltes Objekt gespeichert
-                    if (!this.originalMaterialStates.has(material.uuid)) {
-                        this.originalMaterialStates.set(material.uuid, {
-                            opacity: material.opacity,
-                            transparent: material.transparent,
-                            emissive: material.emissive.getHex(),
-                        });
+                     if (material) {
+                        if (!material.uuid) material.uuid = THREE.MathUtils.generateUUID();
+                        // KORRIGIERT: Speichere wahren Originalzustand
+                        if (!this.originalMaterialStates.has(material.uuid)) {
+                            let originalEmissiveValue = material.emissive?.getHex() ?? 0x000000;
+                            const hoverState = this.originalMaterialStatesForHover.get(material.uuid);
+                            if (hoverState) { originalEmissiveValue = hoverState.emissive; } // Nimm Wert aus Hover-Map wenn vorhanden
+                            this.originalMaterialStates.set(material.uuid, {
+                                opacity: material.opacity ?? 1.0, transparent: material.transparent ?? false,
+                                emissive: originalEmissiveValue,
+                            });
+                        }
+                        // Highlight anwenden
+                        material.transparent = true; material.opacity = this.highlightOptions.opacity;
+                        if(material.emissive) { material.emissive.setHex(this.highlightOptions.emissiveColor); }
+                        material.needsUpdate = true;
                     }
-                    material.transparent = true;
-                    material.opacity = this.highlightOptions.opacity;
-                    material.emissive.setHex(this.highlightOptions.emissiveColor);
-                    material.needsUpdate = true;
                 });
             }
         });
-    }
+         // KORRIGIERT: Hover-Zustand beim Auswählen aufräumen
+         if (object === this.hoveredObject) {
+             this.removeHoverEffect(this.hoveredObject); // Räumt hoverMap auf
+             this.hoveredObject = null;
+         } else if (this.originalMaterialStatesForHover.size > 0) {
+             this.originalMaterialStatesForHover.clear(); // Sicherheitshalber leeren
+         }
+    } // Ende applyHighlight
 
-    // Highlighting (Auswahl) entfernen (ANGEPASST: optionales Leeren der Map)
-    removeHighlight(object, clearGlobalMapIfNeeded = false) {
+
+    /**
+     * Entfernt Highlight.
+     */
+    removeHighlight(object) { // Parameter clearGlobalMapIfNeeded entfernt, da Map nur pro Material geleert wird
         if (!object) return;
-
         object.traverse((child) => {
-            if (child.isMesh && child.material) {
+             if ((child.isMesh || child.isLine || child.isPoints) && child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 materials.forEach(material => {
-                    if (material.uuid && this.originalMaterialStates.has(material.uuid)) {
-                        // Prüfen, ob dieses Material noch von einem *anderen* ausgewählten Objekt genutzt wird
+                     if (material && material.uuid && this.originalMaterialStates.has(material.uuid)) {
+                        // Prüfe, ob von anderen ausgewählten genutzt
                         let isUsedByOtherSelected = false;
-                        for(const otherObj of this.selectedObjects) {
-                             if (otherObj !== object) { // Schaue nur andere Objekte an
-                                 otherObj.traverse((otherChild) => {
-                                      if(otherChild.isMesh && otherChild.material) {
-                                           const otherMaterials = Array.isArray(otherChild.material) ? otherChild.material : [otherChild.material];
-                                           if(otherMaterials.some(m => m.uuid === material.uuid)) {
-                                                isUsedByOtherSelected = true;
-                                           }
-                                      }
-                                 });
-                             }
-                             if(isUsedByOtherSelected) break;
-                        }
-
-                        // Nur wiederherstellen, wenn nicht von anderem ausgewählten Objekt genutzt
+                        for(const otherObj of this.selectedObjects) { if (otherObj !== object && !isUsedByOtherSelected) { otherObj.traverse((otherChild) => { if((otherChild.isMesh||otherChild.isLine||otherChild.isPoints) && otherChild.material){ const oms = Array.isArray(otherChild.material)?otherChild.material:[otherChild.material]; if(oms.some(m=>m&&m.uuid===material.uuid)){ isUsedByOtherSelected=true; } } }); } }
+                        // Nur wiederherstellen, wenn nicht mehr gebraucht
                         if (!isUsedByOtherSelected) {
                              const originalState = this.originalMaterialStates.get(material.uuid);
                              material.opacity = originalState.opacity;
                              material.transparent = originalState.transparent;
-                             material.emissive.setHex(originalState.emissive);
+                             if (material.emissive) { material.emissive.setHex(originalState.emissive); }
                              material.needsUpdate = true;
-                             // Zustand aus Map entfernen, da wiederhergestellt
-                             this.originalMaterialStates.delete(material.uuid);
+                             this.originalMaterialStates.delete(material.uuid); // Zustand entfernen
                         }
                     }
                 });
             }
         });
+    } // Ende removeHighlight
 
-        // Globale Map nur leeren, wenn explizit gefordert (z.B. bei Deselect All)
-        if (clearGlobalMapIfNeeded && this.originalMaterialStates.size > 0) {
-             console.warn("[SelectionManager] Clearing highlight states map, but some states might remain unrestored if materials were shared and other objects kept them selected.");
-             // Besser: Die Map wird nur durch das Entfernen oben nach und nach geleert.
-             // this.originalMaterialStates.clear(); // Vorerst nicht global leeren hier
-        }
-    }
 
-    // Hover-Effekt anwenden
+    /**
+     * Wendet Hover an. (Ohne clear am Anfang)
+     */
     applyHoverEffect(object) {
-        if (!object || this.selectedObjects.includes(object)) return; // Nicht auf ausgewählte Objekte anwenden
-
-        this.originalMaterialStatesForHover.clear();
-
+        if (!object || this.selectedObjects.includes(object)) return;
+        // Kein clear() hier!
         object.traverse((child) => {
-            if (child.isMesh && child.material) {
+             if ((child.isMesh || child.isLine || child.isPoints) && child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 materials.forEach(material => {
-                    if (!material.uuid) material.uuid = THREE.MathUtils.generateUUID();
-                    if (!this.originalMaterialStatesForHover.has(material.uuid)) {
-                         this.originalMaterialStatesForHover.set(material.uuid, {
-                              emissive: material.emissive.getHex()
-                         });
+                    if (material && material.emissive) {
+                        if (!material.uuid) material.uuid = THREE.MathUtils.generateUUID();
+                        if (!this.originalMaterialStatesForHover.has(material.uuid)) { // Nur speichern, wenn nicht schon drin
+                            this.originalMaterialStatesForHover.set(material.uuid, {
+                                emissive: material.emissive.getHex()
+                            });
+                        }
+                        material.emissive.setHex(this.hoverOptions.emissiveColor);
+                        material.needsUpdate = true;
                     }
-                    material.emissive.setHex(this.hoverOptions.emissiveColor);
-                    material.needsUpdate = true;
                 });
             }
         });
-    }
+    } // Ende applyHoverEffect
 
-     // Hover-Effekt entfernen
+    /**
+     * Entfernt Hover.
+     */
      removeHoverEffect(object) {
           if (!object || this.originalMaterialStatesForHover.size === 0) return;
-          // Hover nicht entfernen, wenn Objekt gerade ausgewählt wurde (Highlight überschreibt)
-          if (this.selectedObjects.includes(object)) return;
-
+          // Hover auch nicht entfernen, wenn Objekt ausgewählt ist (Highlight ist aktiv)
+          if (this.selectedObjects.includes(object)) {
+              this.originalMaterialStatesForHover.clear(); // Zustand verwerfen, da Highlight aktiv wird/ist
+              return;
+          }
           object.traverse((child) => {
-               if (child.isMesh && child.material) {
+               if ((child.isMesh || child.isLine || child.isPoints) && child.material) {
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                     materials.forEach(material => {
-                         if (material.uuid && this.originalMaterialStatesForHover.has(material.uuid)) {
+                         if (material && material.uuid && this.originalMaterialStatesForHover.has(material.uuid) && material.emissive) {
                               const originalHoverState = this.originalMaterialStatesForHover.get(material.uuid);
                               material.emissive.setHex(originalHoverState.emissive);
                               material.needsUpdate = true;
@@ -417,23 +509,14 @@ class SelectionManager {
                     });
                }
           });
-          this.originalMaterialStatesForHover.clear();
-     }
+          this.originalMaterialStatesForHover.clear(); // Zustandsspeicher leeren nach Wiederherstellung
+     } // Ende removeHoverEffect
 
-    // Explizite Deselektion aller Objekte
-    deselectAll() {
-        this.updateSelection(null, false); // Simuliert Klick auf Hintergrund
-    }
+    // Getter/Setter (wie vorher)
+    deselectAll() { this.updateSelection(null, false); }
+    getSelectedObjects() { return this.selectedObjects; }
+    getSingleSelectedObject() { return this.selectedObjects[0] || null; }
 
-    // Gibt das Array der ausgewählten Objekte zurück
-    getSelectedObjects() {
-        return this.selectedObjects;
-    }
-
-    // Gibt das erste ausgewählte Objekt zurück (für Kompatibilität oder einfache Fälle)
-    getSingleSelectedObject() {
-         return this.selectedObjects[0] || null;
-    }
-}
+} // Ende class SelectionManager
 
 export default SelectionManager;

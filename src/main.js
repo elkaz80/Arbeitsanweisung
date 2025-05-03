@@ -47,7 +47,7 @@ try {
         html3DManager
     );
     selectionManager.init(); // Selection Manager Listener hinzufügen
-
+    controlsManager.setSelectionManager(selectionManager);
     // 5. Manager-Referenzen setzen (damit sich alle kennen)
     appManager.setManagers(uiManager, selectionManager, controlsManager, html3DManager, animationManager);
     uiManager.setManagers(appManager, selectionManager, loaderService, controlsManager, animationManager, html3DManager);
