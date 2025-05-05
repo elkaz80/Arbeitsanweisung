@@ -1,0 +1,304 @@
+/* src/style.css */
+
+/* Globale Resets und Basis-Styling */
+* {
+    box-sizing: border-box; /* Intuitiveres Box-Modell */
+  }
+  
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: #1e1e1e; /* Dunkler Hintergrund */
+    color: #cccccc;          /* Heller Text */
+    display: flex;
+    flex-direction: column;
+    height: 100vh;          /* Volle Höhe des Viewports */
+    overflow: hidden;         /* Verhindert Scrollbalken am Body */
+  }
+  
+  /* --- Layout --- */
+  #navbar {
+    background-color: #333333;
+    padding: 5px 15px;
+    display: flex;
+    gap: 8px; /* Abstand zwischen Buttons */
+    flex-shrink: 0; /* Navbar soll nicht schrumpfen */
+    border-bottom: 1px solid #4a4a4a;
+    height: 45px; /* Feste Höhe für die Navbar */
+    align-items: center;
+  }
+  
+  #main-content {
+    flex-grow: 1; /* Nimmt den restlichen Platz ein */
+    display: flex;
+    overflow: hidden; /* Wichtig, damit innere Elemente scrollen können */
+  }
+  
+  #sidebar {
+    width: 280px; /* Breite der Sidebar */
+    background-color: #2a2a2a;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* Abstand zwischen Titel und Liste */
+    flex-shrink: 0;
+    border-right: 1px solid #4a4a4a;
+    overflow-y: auto; /* Scrollbar, falls Inhalt zu lang */
+  }
+  
+  #sidebar h5 {
+      margin-top: 0;
+      margin-bottom: 5px;
+      color: #aaaaaa;
+      font-size: 14px;
+      text-transform: uppercase;
+  }
+  
+  #scene-container {
+    flex-grow: 1; /* Nimmt den restlichen Platz im Hauptbereich */
+    position: relative; /* Wichtig für absolute Positionierung von Canvas/CSS3D */
+    overflow: hidden;
+    background-color: #1a1d21; /* Hintergrund für den 3D-Bereich */
+  }
+  
+  #three-canvas {
+    display: block; /* Verhindert zusätzlichen Leerraum unter dem Canvas */
+    width: 100%;
+    height: 100%;
+  }
+  
+  /* --- Buttons --- */
+  .menu-btn,
+  .menu-icon-button,
+  .menu-item-button,
+  .template-button,
+  .tool-button {
+    background-color: #4f4f4f;
+    color: #e0e0e0;
+    border: 1px solid #666;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+    display: inline-flex; /* Für Icon + Text Alignment */
+    align-items: center;
+    gap: 5px;
+  }
+  
+  .menu-btn:hover,
+  .menu-icon-button:hover,
+  .menu-item-button:hover,
+  .template-button:hover,
+  .tool-button:hover {
+    background-color: #5a5a5a;
+    border-color: #777;
+  }
+  
+  /* Speziell für Buttons, die nur ein Icon enthalten */
+  .menu-icon-button {
+    padding: 5px;
+    line-height: 1;
+  }
+  
+  /* Aktiv-Zustand für Buttons (z.B. Transform-Modus, Menü-Toggle) */
+  .menu-btn.active, /* Für Hauptmenü-Buttons */
+  .menu-icon-button.active /* Für Transform-Buttons */
+  {
+    background-color: #4a6a90; /* Blau als Akzentfarbe */
+    border-color: #6a8dbf;
+    color: #ffffff;
+  }
+  
+  
+  /* Material Icons Styling (innerhalb von Buttons etc.) */
+  .material-icons {
+    font-size: 20px;
+    vertical-align: middle;
+    /* Verhindert, dass Icons Textauswahl ermöglichen */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+  }
+  .object-icon { font-size: 16px; margin-right: 5px; vertical-align: bottom; color: #aaa; }
+  .template-button .material-icons { margin-right: 8px; vertical-align: bottom; }
+  .tool-button .material-icons { margin-right: 8px; vertical-align: bottom; font-size: 18px; }
+  
+  
+  /* --- Submenüs --- */
+  .submenu {
+    display: none; /* Standardmäßig versteckt */
+    position: absolute;
+    top: 48px; /* Direkt unter der Navbar (höhe 45px + 3px Puffer) */
+    left: 10px; /* Beispiel: Start links */
+    background-color: #3a3a3a;
+    border: 1px solid #555;
+    border-radius: 5px;
+    padding: 15px;
+    z-index: 100; /* Über anderen UI-Elementen */
+    min-width: 220px; /* Mindestbreite */
+    max-width: 300px; /* Maximalbreite */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+    color: #ddd;
+  }
+  
+  /* Positionierung einzelner Submenüs anpassen (Beispiele) */
+  /* Diese Werte müssen eventuell angepasst werden, je nachdem wo die Buttons sind */
+  #file-submenu { left: 10px; }
+  #html-submenu { left: 65px; }
+  #tools-submenu { left: 120px; }
+  #settings-submenu { left: 175px; }
+  
+  .submenu h4 {
+    margin-top: 0;
+    border-bottom: 1px solid #555;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    font-size: 15px;
+    color: #eee;
+    font-weight: 500;
+  }
+  
+  .submenu hr {
+    border: none;
+    border-top: 1px solid #555;
+    margin: 12px 0;
+  }
+  
+  .submenu label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: #bbb;
+  }
+  
+  .submenu select,
+  .submenu input[type="text"],
+  .submenu input[type="number"],
+  .submenu input[type="color"],
+  .submenu input[type="checkbox"],
+  .submenu button.menu-item-button,
+  .submenu button.template-button {
+    width: 100%; /* Volle Breite im Menü */
+    margin-bottom: 8px;
+    padding: 6px;
+    background-color: #555;
+    color: #eee;
+    border: 1px solid #666;
+    border-radius: 3px;
+  }
+  .submenu input[type="checkbox"] {
+      width: auto; /* Checkboxen nicht volle Breite */
+      margin-right: 5px;
+      vertical-align: middle;
+  }
+  .submenu label[for*="toggle"] { /* Label neben Checkbox */
+      display: inline-block;
+      margin-bottom: 8px;
+  }
+  
+  
+  .submenu input[type="range"] {
+    width: 100%; /* Slider volle Breite */
+    margin-top: 4px;
+    margin-bottom: 8px;
+  }
+  
+  /* --- Tools Panel Spezifisch --- */
+  .menu-category {
+    font-weight: bold;
+    margin-top: 12px;
+    margin-bottom: 6px;
+    color: #bbbbbb;
+    font-size: 12px;
+    text-transform: uppercase;
+    border-bottom: 1px dashed #666;
+    padding-bottom: 3px;
+  }
+  .menu-category:first-of-type {
+      margin-top: 0; /* Kein oberer Rand für die erste Kategorie */
+  }
+  
+  .tool-button {
+    display: flex; /* Icon und Text nebeneinander */
+    width: 100%;
+    text-align: left;
+    margin-bottom: 4px;
+    background-color: #484848;
+    padding: 5px 8px; /* Etwas weniger Padding */
+  }
+  .tool-button:hover {
+    background-color: #585858;
+  }
+  
+  
+  /* --- Object Graph Panel --- */
+  #object-list-container {
+    background-color: #2f2f2f; /* Etwas dunkler als Sidebar */
+    padding: 8px;
+    border-radius: 3px;
+    flex-grow: 1;
+    overflow-y: auto;
+    font-size: 13px;
+  }
+  
+  .object-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .object-list-item {
+    padding: 4px 6px;
+    cursor: pointer;
+    border-radius: 3px;
+    margin-bottom: 2px;
+    display: flex; /* Icon und Text nebeneinander */
+    align-items: center;
+    white-space: nowrap; /* Verhindert Umbruch */
+    overflow: hidden;   /* Verhindert Überlaufen */
+    text-overflow: ellipsis; /* Fügt ... hinzu, wenn zu lang */
+  }
+  
+  .object-list-item:hover {
+    background-color: #4a4a4a;
+  }
+  
+  /* Highlight für ausgewählte Objekte in der Liste */
+  .object-list-item.selected {
+    background-color: #4a6a90; /* Gleiche Farbe wie aktive Buttons */
+    color: #ffffff;
+  }
+  .object-list-item.selected .object-icon {
+      color: #ffffff; /* Icon auch heller machen */
+  }
+  
+  /* --- HTML 3D Elemente (Beispiel Styling) --- */
+  .html-element {
+      /* Standard-Styling für Elemente, die über CSS3DObject hinzugefügt werden */
+      background-color: rgba(255, 255, 255, 0.9); /* Leicht transparent weiß */
+      color: #333;
+      padding: 15px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      pointer-events: auto !important; /* WICHTIG: Muss Klicks empfangen können! */
+      cursor: default; /* Standard-Mauszeiger */
+      min-width: 50px; /* Minimale Größe */
+      min-height: 30px;
+      overflow: hidden; /* Verhindert, dass Inhalt überläuft */
+  }
+  .html-element h3, .html-element h4 {
+      margin-top: 0;
+      color: #111;
+  }
+  .html-element p {
+      margin-bottom: 0;
+      font-size: 14px;
+      line-height: 1.4;
+  }
+  .html-element img, .html-element iframe, .html-element video {
+      max-width: 100%; /* Sorgt dafür, dass Medien nicht überlaufen */
+      display: block;
+  }

@@ -1,17 +1,30 @@
-// src/main.js (KORRIGIERT v14 - Fix Init Order for SelectionManager)
+// src/main.js (Refaktorierte Version nach Auslagerung)
 
-import './style.css';
-import * as THREE from 'three';
-import AppManager from './AppManager';
-import UIManager from './UIManager';
-import ControlsManager from './ControlsManager';
-import SelectionManager from './SelectionManager';
-import LoaderService from './LoaderService';
-import HTML3DManager from './HTML3DManager';
-import AnimationManager from './AnimationManager';
+import '/style.css'; // Globale Styles importieren
 
-console.log("--- Main Script Start v14 (Fix SelectionManager Init Order) ---");
+// Kern-Module importieren
+import AppManager from './Core/AppManager.js';
+import { createLights, createFloor, createHelpers } from './Core/SceneSetup.js';
 
+// Manager importieren
+import ControlsManager from './Managers/ControlsManager.js';
+import SelectionManager from './Managers/SelectionManager.js';
+import HTML3DManager from './Managers/HTML3DManager.js';
+import AnimationManager from './Managers/AnimationManager.js';
+import ConnectorManager from './Managers/ConnectorManager.js';
+// ARVRManager etc. hier importieren, wenn vorhanden
+
+// Services importieren
+import LoaderService from './Services/LoaderService.js';
+// DetectionService etc. hier importieren, wenn vorhanden
+
+// UI Haupt-Manager importieren (Panels werden intern von UIManager geladen)
+import UIManager from './UI/UIManager.js';
+
+// Versions-Log oder Startmeldung
+console.log("--- Main Script Start v15+ (Refactored Structure) ---");
+
+// DOM-Elemente holen
 const appContainer = document.getElementById('scene-container');
 const canvas = document.getElementById('three-canvas');
 
@@ -20,75 +33,95 @@ if (!appContainer || !canvas) {
 }
 
 try {
-    // 1. Kern App Manager initialisieren (erstellt Renderer, Scene, Camera)
+    // --- 1. Kern-App initialisieren ---
     const appManager = new AppManager(canvas, appContainer);
-    appManager.init();
+    appManager.init(); // Erstellt Renderer, Scene, Camera, Pivot
+    // Wichtige Referenzen holen
+    const scene = appManager.getScene();
+    const camera = appManager.getCamera();
+    const renderer = appManager.getRenderer();
+    const initialRendererSize = { width: appContainer.clientWidth, height: appContainer.clientHeight }; // Größe für ConnectorManager
 
-    // 2. Manager Instanzen erstellen (Reihenfolge angepasst!)
-    const controlsManager = new ControlsManager(appManager.getCamera(), appManager.getRenderer().domElement);
-    const html3DManager = new HTML3DManager(appContainer, appManager.getCamera());
-    const animationManager = new AnimationManager();
-    const uiManager = new UIManager(); // Enthält jetzt die korrigierten Listener
-    const loaderService = new LoaderService(appManager);
+    // --- 2. Initiale Szene aufbauen ---
+    console.log("[Main] Setting up initial scene content...");
+    const lights = createLights(scene);
+    const floor = createFloor(scene);
+    createHelpers(scene); // Optional, kann auskommentiert werden in SceneSetup.js
+    // Referenzen an AppManager übergeben (optional, wenn er sie braucht)
+    appManager.setInitialSceneObjects(lights, floor);
 
-    // 3. Manager initialisieren, die KEINE anderen Manager brauchen ODER
-    //    deren Eigenschaften VORHER gebraucht werden
-    controlsManager.init(appManager.getScene());
-    html3DManager.init(); // WICHTIG: Erstellt cssScene
-
-    // 4. SelectionManager erstellen (jetzt sollten cssScene etc. existieren)
-    const selectionManager = new SelectionManager(
-        appManager.getCamera(),
-        appManager.getScene(),
-        html3DManager.getCSSScene(),    // Jetzt sollte cssScene existieren
-        appManager.getRenderer().domElement,
+    // --- 3. Manager und Services instanziieren ---
+    // Reihenfolge beachten, falls Abhängigkeiten im Konstruktor bestehen (besser über Setter/init)
+    console.log("[Main] Instantiating managers and services...");
+    const html3DManager = new HTML3DManager(appContainer, camera); // Braucht Container, Kamera
+    const animationManager = new AnimationManager();                // Braucht erstmal nichts
+    const controlsManager = new ControlsManager(camera, renderer.domElement); // Braucht Kamera, DOM
+    const loaderService = new LoaderService(appManager);            // Braucht AppManager
+    const connectorManager = new ConnectorManager(scene, camera, initialRendererSize); // Braucht Szene, Kamera, Größe
+    const uiManager = new UIManager();                              // Braucht erstmal nichts
+    const selectionManager = new SelectionManager(                // Braucht viele Referenzen
+        camera,
+        scene,
+        html3DManager.getCSSScene(), // CSSScene von HTML3DManager holen
+        renderer.domElement,
         controlsManager,
         uiManager,
         html3DManager
     );
-    selectionManager.init(); // Selection Manager Listener hinzufügen
+
+    // --- 4. Manager initialisieren (die 'init'-Methoden haben) ---
+    console.log("[Main] Initializing managers...");
+    html3DManager.init();       // Erstellt CSS Scene & Renderer
+    connectorManager.init();    // Erstellt default Material etc.
+    controlsManager.init(scene); // Fügt TransformControls zur Szene hinzu
+    selectionManager.init();    // Fügt Event Listener hinzu
+
+    // --- 5. Abhängigkeiten / Referenzen setzen ---
+    // WICHTIG: Sicherstellen, dass alle Manager die Referenzen bekommen, die sie brauchen
+    console.log("[Main] Setting manager references...");
     controlsManager.setSelectionManager(selectionManager);
-    // 5. Manager-Referenzen setzen (damit sich alle kennen)
-    appManager.setManagers(uiManager, selectionManager, controlsManager, html3DManager, animationManager);
-    uiManager.setManagers(appManager, selectionManager, loaderService, controlsManager, animationManager, html3DManager);
-    html3DManager.setSelectionManager(selectionManager);
+    html3DManager.setSelectionManager(selectionManager); // Falls benötigt
+    // Übergibt ALLE potenziell benötigten Manager an AppManager und UIManager
+    appManager.setManagers(uiManager, selectionManager, controlsManager, html3DManager, animationManager, connectorManager);
+    uiManager.setManagers(appManager, selectionManager, loaderService, controlsManager, animationManager, html3DManager, connectorManager);
+    // AnimationManager braucht UIManager für Timeline-Updates
+    animationManager.setUIManager(uiManager);
 
-    // 6. UI initialisieren (holt DOM Refs, setzt Listener korrekt)
-    uiManager.init(); // Diese init() ruft die populateXMenu Methoden auf
 
-    // 7. Update Callback für Animate-Loop setzen
+    // --- 6. UI initialisieren ---
+    // UIManager.init() erstellt jetzt intern die spezifischen Panels (Settings, File, Tools, HTML, ObjectGraph)
+    console.log("[Main] Initializing UI...");
+    uiManager.init();
+
+    // --- 7. Update-Loop Callback definieren ---
+    console.log("[Main] Setting update callback...");
     appManager.setUpdateCallback((deltaTime, time) => {
-        controlsManager.update(deltaTime);
-        if (animationManager) {
-            animationManager.update(controlsManager.isDraggingGizmo);
-            // Die Überprüfung hier ist gut, um Fehler zu vermeiden, falls UI Manager noch nicht bereit ist
-            if (uiManager && typeof uiManager.updateTimelineIndicator === 'function') {
-                 uiManager.updateTimelineIndicator(animationManager.getCurrentTime());
-            } else if (!uiManager?.loggedTimelineUpdateError) {
-                 console.warn("UIManager or updateTimelineIndicator not ready in callback.");
-                 // uiManager.loggedTimelineUpdateError = true; // Ggf. Flag nutzen, um nur einmal zu warnen
-            }
-        }
+        // Manager updaten, die pro Frame Arbeit leisten müssen
+        controlsManager.update(deltaTime); // OrbitControls Damping
+        animationManager?.update(controlsManager.isDraggingGizmo, deltaTime); // Zeit fortschreiben
+        connectorManager?.update(); // Linienpositionen aktualisieren
+
+        // UI updaten (Beispiel Timeline)
+        uiManager?.updateTimelineIndicator(animationManager?.getCurrentTime());
     });
 
-    // 8. Initiales UI Setup
-    // Stellen sicher, dass die Szene bereit ist, bevor die Liste aktualisiert wird
-    if (appManager.getScene()) {
-         uiManager.updateObjectList(appManager.getScene());
-    } else {
-        console.error("[Main.js] Scene not ready for initial object list update!");
-    }
+    // --- 8. Globaler Resize Listener (aktualisiert auch ConnectorManager) ---
+    // Hinweis: AppManager.handleResize aktualisiert Renderer, Kamera, HTML3DManager UND ConnectorManager
+    window.addEventListener('resize', () => appManager.handleResize());
 
 
-    // 9. Animation Loop starten
+    // --- 9. Render-Loop starten ---
+    console.log("[Main] Starting application loop...");
     appManager.start();
 
-    // *** DER TEMPORÄRE TEST-CODE WURDE HIER ENTFERNT ***
-
-    console.log("--- Application Initialized Successfully v14 ---");
+    console.log(`--- Application Initialized Successfully (v15+ Refactored) ---`);
 
 } catch (error) {
-    console.error("Initialization failed:", error);
-    const container = document.getElementById('scene-container') || document.body;
-    container.innerHTML = `<div style="padding: 20px; color: red; font-family: sans-serif;"><h2>Initialization Error</h2><p>Could not start application. Check console.</p><pre>${error.stack || error}</pre></div>`;
+    // Verbesserte Fehleranzeige
+    console.error("Application Initialization Failed:", error);
+    appContainer.innerHTML = `<div style="padding: 20px; color: #ff8a8a; background-color: #2a2a2a; border: 1px solid #ff5555; font-family: sans-serif;">
+                              <h2>Initialization Error</h2>
+                              <p>Could not start application. Check console for details.</p>
+                              <pre style="white-space: pre-wrap; word-wrap: break-word;">${error.stack || error}</pre>
+                              </div>`;
 }

@@ -8,7 +8,7 @@ import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'; // 
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'; // NEU (Optional für GLTF)
 
 // Stellen Sie sicher, dass diese utils importiert werden
-import { hasInvalidTransform, tempBox, tempSize } from './utils'; // Annahme: tempBox/tempSize sind THREE.Box3/Vector3
+import { hasInvalidTransform, tempBox, tempSize } from '../Utils/utils'; // Annahme: tempBox/tempSize sind THREE.Box3/Vector3
 
 class LoaderService {
     constructor(appManager) {

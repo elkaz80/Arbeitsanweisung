@@ -1,81 +1,113 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>3D Arbeitsanweisung Editor</title>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined" rel="stylesheet">
-    <link rel="stylesheet" href="/src/style.css"> </head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Editor Projekt</title>
+
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        /* Grundlegendes Styling (Beispiele - in style.css auslagern!) */
+        body { margin: 0; font-family: sans-serif; background-color: #2a2a2a; color: #eee; display: flex; flex-direction: column; height: 100vh; }
+        #navbar { background-color: #333; padding: 5px 10px; display: flex; gap: 10px; flex-shrink: 0; border-bottom: 1px solid #555; }
+        .menu-btn, .menu-icon-button, .menu-item-button, .template-button, .tool-button {
+            background-color: #555; color: #eee; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;
+        }
+        .menu-btn:hover, .menu-icon-button:hover, .menu-item-button:hover, .template-button:hover, .tool-button:hover { background-color: #666; }
+        .menu-icon-button { padding: 5px; line-height: 1; } /* Für reine Icon-Buttons */
+        .menu-icon-button .material-icons { font-size: 20px; vertical-align: middle; }
+
+        #main-content { flex-grow: 1; display: flex; overflow: hidden; } /* Wichtig für Layout */
+
+        #sidebar { width: 250px; background-color: #383838; padding: 10px; display: flex; flex-direction: column; gap: 15px; flex-shrink: 0; border-right: 1px solid #555; overflow-y: auto;}
+        #object-list-container { background-color: #444; padding: 5px; border-radius: 3px; flex-grow: 1; /* Nimmt verfügbaren Platz */ overflow-y: auto; }
+        .object-list { list-style: none; padding: 0; margin: 0; }
+        .object-list-item { padding: 3px 5px; cursor: pointer; border-radius: 2px; margin-bottom: 1px; display: flex; align-items: center; }
+        .object-list-item:hover { background-color: #555; }
+        .object-list-item.selected { background-color: #4a6a90; /* Highlight Farbe */ }
+        .object-icon { font-size: 16px; margin-right: 5px; vertical-align: bottom; }
+
+
+        #scene-container { flex-grow: 1; position: relative; overflow: hidden; /* Wichtig damit Canvas passt */ }
+        #three-canvas { display: block; width: 100%; height: 100%; }
+
+        .submenu {
+            display: none; /* Standardmäßig versteckt */
+            position: absolute; /* Positionierung relativ zur Navbar oder zum Button */
+            top: 45px; /* Beispiel: Unter der Navbar */
+            left: 10px; /* Beispiel */
+            background-color: #444;
+            border: 1px solid #666;
+            border-radius: 5px;
+            padding: 15px;
+            z-index: 10; /* Über dem Canvas */
+            min-width: 200px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .submenu h4 { margin-top: 0; border-bottom: 1px solid #666; padding-bottom: 5px; margin-bottom: 10px; }
+        .submenu hr { border: none; border-top: 1px solid #666; margin: 10px 0; }
+        .submenu label { display: block; margin-bottom: 3px; font-size: 13px; }
+        .submenu select, .submenu input[type="checkbox"] { margin-bottom: 8px; }
+        .submenu input[type="range"] { width: calc(100% - 20px); margin-left: 10px;} /* Beispiel für Slider */
+        .menu-category { font-weight: bold; margin-top: 10px; margin-bottom: 5px; color: #ccc; font-size: 12px; text-transform: uppercase; border-bottom: 1px dashed #666; padding-bottom: 3px;}
+        .tool-button { display: block; width: 100%; text-align: left; margin-bottom: 4px; background-color: #505050; }
+        .tool-button:hover { background-color: #606060;}
+        .tool-button .material-icons { margin-right: 8px; vertical-align: bottom; font-size: 18px; }
+        .transform-controls-buttons button { margin: 2px; }
+        .transform-controls-buttons button.active { background-color: #6a8dbf; }
+
+
+    </style>
+</head>
 <body>
-    <nav id="navbar">
-        <div class="navbar-group left">
-            <div id="file-menu-container" class="menu-container">
-                <button id="file-menu-btn" class="icon-btn" title="Datei"><span class="material-icons">folder</span></button>
-                <div id="file-submenu" class="submenu">
-                    <button id="uploadButton-in-menu">
-                        <span class="material-icons">file_upload</span>Modell laden...
-                    </button>
-                    <hr>
-                    <button id="export-btn-in-menu">
-                        <span class="material-icons">save</span>Exportieren...
-                    </button>
-                    <hr>
-                    <div class="submenu-item" style="color: var(--text-color-muted); font-size: 0.8em; padding-bottom: 0; cursor: default;">Transformation:</div>
-                    <div id="transform-controls-container-submenu" class="button-group" style="padding: 5px 0; border: none; margin-left: 8px;"> <button id="transform-translate-btn" class="icon-btn" title="Verschieben (G)"><span class="material-icons">open_with</span></button>
-                        <button id="transform-rotate-btn" class="icon-btn" title="Drehen (R)"><span class="material-icons">rotate_90_degrees_ccw</span></button>
-                        <button id="transform-scale-btn" class="icon-btn" title="Skalieren (S)"><span class="material-icons">aspect_ratio</span></button>
-                    </div>
-                </div>
-            </div>
 
-            <div id="html-menu-container" class="menu-container">
-                <button id="html-menu-btn" class="icon-btn" title="HTML Element"><span class="material-icons">description</span></button>
-                <div id="html-submenu" class="submenu">
-                    </div>
-            </div>
-
-            <div id="tools-menu-container" class="menu-container">
-                 <button id="tools-menu-btn" class="icon-btn" title="Werkzeuge"><span class="material-icons">build</span></button>
-                 <div id="tools-submenu" class="submenu tools-menu">
-                      </div>
-             </div>
-
-             <button id="settings-btn" class="icon-btn" title="Einstellungen"><span class="material-icons">settings</span></button>
-
+    <div id="navbar">
+        <button id="file-menu-btn" class="menu-btn" title="Datei">
+            <span class="material-icons">folder</span> </button>
+        <button id="html-menu-btn" class="menu-btn" title="HTML Elemente">
+            <span class="material-icons">web</span> </button>
+        <button id="tools-menu-btn" class="menu-btn" title="Werkzeuge">
+            <span class="material-icons">build</span> </button>
+        <button id="settings-menu-btn" class="menu-btn" title="Einstellungen">
+            <span class="material-icons">settings</span> </button>
         </div>
-        <div class="navbar-group right"></div>
-    </nav>
 
     <div id="main-content">
-        <div id="loaded-objects-panel">
-            <div class="panel-header">Geladene Objekte</div>
-            <ul id="loaded-objects-list"></ul>
-        </div>
+
+        <div id="sidebar">
+            <h5>Objektliste</h5>
+            <div id="object-list-container">
+                <p style="color: #aaa; text-align: center; padding-top: 20px;">Lädt...</p>
+            </div>
+            </div>
+
         <div id="scene-container">
             <canvas id="three-canvas"></canvas>
-        </div>
+            </div>
+
     </div>
 
-    <div id="timeline-panel">
-         <div id="timeline-controls-container">
-            <div id="timeline-buttons">
-                <button id="stepBackwardBtn" class="icon-btn" title="Schritt zurück"><span class="material-icons">skip_previous</span></button>
-                <button id="playPauseBtn" class="icon-btn" title="Play/Pause"><span class="material-icons">play_arrow</span></button>
-                <button id="stepForwardBtn" class="icon-btn" title="Schritt vor"><span class="material-icons">skip_next</span></button>
-            </div>
-            <span id="timeline-range-start">0.0s</span>
-            <div id="keyframe-track-container">
-                <div id="time-indicator">
-                    <span id="time-indicator-label">0.00s</span>
-                    <div id="time-indicator-line"></div>
-                </div>
-            </div>
-            <input type="text" id="timeline-range-end-input" value="10.0s">
-        </div>
+    <div id="file-submenu" class="submenu"></div>
+    <div id="html-submenu" class="submenu"></div>
+    <div id="tools-submenu" class="submenu"></div>
+    <div id="settings-submenu" class="submenu"></div>
+    
+    <div id="timeline-controls" style="position: fixed; bottom: 0; left: 0; width: 100%; background-color: #333; padding: 8px 15px; border-top: 1px solid #555; display: flex; align-items: center; gap: 10px; z-index: 50; height: 45px;">
+        <button id="anim-stop-btn" class="menu-icon-button" title="Stop & Zurücksetzen (0)">
+            <span class="material-icons">stop</span>
+        </button>
+        <button id="anim-play-pause-btn" class="menu-icon-button" title="Play/Pause (Space)">
+            <span class="material-icons" id="play-pause-icon">play_arrow</span> </button>
+        <input type="range" id="timeline-slider" min="0" max="10" step="0.01" value="0" style="flex-grow: 1; height: 8px; cursor: pointer;">
+        <span id="timeline-time" style="min-width: 90px; text-align: right; font-size: 12px; font-family: monospace;">0.00s / 0.00s</span>
+        <button id="add-keyframe-btn" class="menu-icon-button" title="Keyframe hinzufügen (K)">
+             <span class="material-icons">add_to_photos</span>
+        </button>
     </div>
-
-    <input type="file" id="fileInput" accept=".gltf,.glb,.obj" style="display: none;">
-
     <script type="module" src="/src/main.js"></script>
+
 </body>
 </html>

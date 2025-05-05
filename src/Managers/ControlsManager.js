@@ -3,11 +3,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-import { tempBox, tempSize } from './utils.js'; // tempVec ggf. hinzufügen
 
 // Hilfsmatrizen
 const mat4 = new THREE.Matrix4(); // Wiederverwendbar
-const vec3 = new THREE.Vector3(); // Wiederverwendbar
 
 class ControlsManager {
     constructor(camera, domElement) { // Nimmt selectionManager nicht mehr im Konstruktor
