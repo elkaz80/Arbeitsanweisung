@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Arbeitsanweisungs-Editor</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1d21;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* UI Panels */
+        .ui-panel {
+            position: absolute;
+            background: #2a2d31;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .toolbar {
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .object-list {
+            top: 80px;
+            left: 20px;
+            width: 250px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .timeline {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 800px;
+        }
+
+        .instruction-panel {
+            top: 80px;
+            right: 20px;
+            width: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        /* Buttons */
+        .btn {
+            background: #5a9cf8;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #4a8ce8;
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: 1px solid #5a9cf8;
+            padding: 8px;
+        }
+
+        /* Timeline */
+        .timeline-bar {
+            height: 40px;
+            background: #1a1d21;
+            border-radius: 4px;
+            margin: 16px 0;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .timeline-progress {
+            height: 100%;
+            background: #5a9cf8;
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.1s;
+        }
+
+        .keyframe {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 12px;
+            background: #f2b848;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        /* Object List */
+        .object-item {
+            padding: 8px;
+            margin: 4px 0;
+            background: #1a1d21;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .object-item:hover,
+        .object-item.selected {
+            background: #5a9cf8;
+        }
+
+        /* Instructions */
+        .instruction-step {
+            background: #1a1d21;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .instruction-step h4 {
+            color: #f2b848;
+            margin-bottom: 8px;
+        }
+
+        .step-navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 16px;
+        }
+
+        /* HTML Elements in 3D */
+        .html3d-element {
+            background: rgba(42, 45, 49, 0.9);
+            padding: 16px;
+            border-radius: 8px;
+            border: 2px solid #5a9cf8;
+            min-width: 200px;
+            color: #e0e0e0;
+            user-select: none;
+        }
+
+        .html3d-element h3 {
+            color: #f2b848;
+            margin-bottom: 8px;
+        }
+
+        /* File Input */
+        input[type="file"] {
+            display: none;
+        }
+
+        /* Transform Mode Indicator */
+        .transform-mode {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #d65ea5;
+            padding: 8px 16px;
+            border-radius: 4px;
+        }
+
+        /* Loading indicator */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #5a9cf8;
+            font-size: 24px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div class="loading" id="loading">Lade Three.js...</div>
+    
+    <!-- UI Elements -->
+    <div class="ui-panel toolbar" style="display: none;" id="toolbar">
+        <button class="btn" id="loadModelBtn">
+            <span class="material-icons">folder_open</span>
+            Modell laden
+        </button>
+        <button class="btn-icon btn" id="translateBtn" title="Verschieben (G)">
+            <span class="material-icons">open_with</span>
+        </button>
+        <button class="btn-icon btn" id="rotateBtn" title="Drehen (R)">
+            <span class="material-icons">360</span>
+        </button>
+        <button class="btn-icon btn" id="scaleBtn" title="Skalieren (S)">
+            <span class="material-icons">aspect_ratio</span>
+        </button>
+        <button class="btn" id="addHTMLBtn">
+            <span class="material-icons">text_fields</span>
+            HTML hinzufügen
+        </button>
+        <button class="btn" id="addKeyframeBtn">
+            <span class="material-icons">add_circle</span>
+            Keyframe
+        </button>
+    </div>
+
+    <div class="ui-panel object-list" style="display: none;" id="objectListPanel">
+        <h3>Objekte</h3>
+        <div id="objectList"></div>
+    </div>
+
+    <div class="ui-panel timeline" style="display: none;" id="timelinePanel">
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button class="btn-icon btn" id="playBtn">
+                <span class="material-icons">play_arrow</span>
+            </button>
+            <span id="timeDisplay">0.0s / 10.0s</span>
+        </div>
+        <div class="timeline-bar" id="timeline">
+            <div class="timeline-progress" id="timelineProgress"></div>
+        </div>
+    </div>
+
+    <div class="ui-panel instruction-panel" style="display: none;" id="instructionPanel">
+        <h3>Arbeitsanweisungen</h3>
+        <div id="instructionContainer"></div>
+        <button class="btn" id="addInstructionBtn" style="width: 100%; margin-top: 12px;">
+            <span class="material-icons">add</span>
+            Schritt hinzufügen
+        </button>
+    </div>
+
+    <div class="transform-mode" id="transformMode" style="display: none;">Modus: Verschieben</div>
+
+    <input type="file" id="fileInput" accept=".gltf,.glb,.obj,.stl">
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { TransformControls } from 'three/addons/controls/TransformControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+
+        /**
+         * Main Application Manager - Three.js Style
+         */
+        class WorkInstructionEditor {
+            constructor() {
+                this.container = document.getElementById('container');
+                this.objects = [];
+                this.htmlElements = [];
+                this.keyframes = new Map();
+                this.instructions = [];
+                this.currentTime = 0;
+                this.duration = 10;
+                this.isPlaying = false;
+                this.selectedObject = null;
+                this.clock = new THREE.Clock();
+
+                this.init();
+                this.setupEventListeners();
+                this.animate();
+                
+                // Hide loading, show UI
+                document.getElementById('loading').style.display = 'none';
+                document.querySelectorAll('.ui-panel').forEach(panel => {
+                    panel.style.display = 'block';
+                });
+                document.getElementById('transformMode').style.display = 'block';
+            }
+
+            init() {
+                // Scene setup
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x1a1d21);
+                this.scene.fog = new THREE.Fog(0x1a1d21, 10, 50);
+
+                // Camera
+                const aspect = window.innerWidth / window.innerHeight;
+                this.camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+                this.camera.position.set(5, 5, 5);
+                this.camera.lookAt(0, 0, 0);
+
+                // WebGL Renderer
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true,
+                    alpha: true
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+                this.container.appendChild(this.renderer.domElement);
+
+                // CSS3D Renderer for HTML elements
+                this.cssRenderer = new CSS3DRenderer();
+                this.cssRenderer.setSize(window.innerWidth, window.innerHeight);
+                this.cssRenderer.domElement.style.position = 'absolute';
+                this.cssRenderer.domElement.style.top = '0';
+                this.cssRenderer.domElement.style.pointerEvents = 'none';
+                this.container.appendChild(this.cssRenderer.domElement);
+
+                // Controls
+                this.setupControls();
+
+                // Lights
+                this.setupLights();
+
+                // Helpers
+                this.setupHelpers();
+
+                // Raycaster for selection
+                this.raycaster = new THREE.Raycaster();
+                this.pointer = new THREE.Vector2();
+
+                // Loaders
+                this.setupLoaders();
+
+                // Add demo content
+                this.addDemoContent();
+            }
+
+            setupControls() {
+                // Orbit Controls
+                this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.orbitControls.enableDamping = true;
+                this.orbitControls.dampingFactor = 0.05;
+                this.orbitControls.screenSpacePanning = false;
+                this.orbitControls.minDistance = 1;
+                this.orbitControls.maxDistance = 50;
+                this.orbitControls.maxPolarAngle = Math.PI / 2;
+
+                // Transform Controls
+                this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
+                this.transformControls.addEventListener('dragging-changed', (event) => {
+                    this.orbitControls.enabled = !event.value;
+                });
+                this.transformControls.addEventListener('change', () => {
+                    if (this.selectedObject && this.transformControls.dragging) {
+                        this.updateObjectTransform();
+                    }
+                });
+                this.scene.add(this.transformControls);
+            }
+
+            setupLights() {
+                // Ambient light
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+
+                // Main directional light
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(5, 10, 5);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                directionalLight.shadow.camera.near = 0.5;
+                directionalLight.shadow.camera.far = 50;
+                directionalLight.shadow.camera.left = -10;
+                directionalLight.shadow.camera.right = 10;
+                directionalLight.shadow.camera.top = 10;
+                directionalLight.shadow.camera.bottom = -10;
+                this.scene.add(directionalLight);
+
+                // Fill light
+                const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+                fillLight.position.set(-5, 5, -5);
+                this.scene.add(fillLight);
+            }
+
+            setupHelpers() {
+                // Grid
+                const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+                this.scene.add(gridHelper);
+
+                // Axes helper (small in corner)
+                const axesHelper = new THREE.AxesHelper(1);
+                axesHelper.position.set(-8, 0.1, -8);
+                this.scene.add(axesHelper);
+            }
+
+            setupLoaders() {
+                this.gltfLoader = new GLTFLoader();
+                
+                // Add OBJ and STL loaders if needed
+                // this.objLoader = new OBJLoader();
+                // this.stlLoader = new STLLoader();
+            }
+
+            addDemoContent() {
+                // Demo cube
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: 0x5a9cf8,
+                    roughness: 0.4,
+                    metalness: 0.1
+                });
+                const cube = new THREE.Mesh(geometry, material);
+                cube.position.set(0, 0.5, 0);
+                cube.castShadow = true;
+                cube.receiveShadow = true;
+                cube.name = 'Demo Würfel';
+                
+                this.scene.add(cube);
+                this.objects.push(cube);
+
+                // Demo sphere
+                const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 16);
+                const sphereMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xf2b848,
+                    roughness: 0.3,
+                    metalness: 0.2
+                });
+                const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+                sphere.position.set(2, 0.5, 0);
+                sphere.castShadow = true;
+                sphere.receiveShadow = true;
+                sphere.name = 'Demo Kugel';
+                
+                this.scene.add(sphere);
+                this.objects.push(sphere);
+
+                // Ground plane
+                const planeGeometry = new THREE.PlaneGeometry(20, 20);
+                const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
+                const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+                plane.rotation.x = -Math.PI / 2;
+                plane.receiveShadow = true;
+                this.scene.add(plane);
+
+                this.updateObjectList();
+            }
+
+            setupEventListeners() {
+                // Window resize
+                window.addEventListener('resize', () => this.onWindowResize());
+
+                // Mouse/Touch events
+                this.renderer.domElement.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+                this.renderer.domElement.addEventListener('pointermove', (e) => this.onPointerMove(e));
+
+                // Keyboard
+                window.addEventListener('keydown', (e) => this.onKeyDown(e));
+
+                // UI Button Events
+                this.setupUIEventListeners();
+            }
+
+            setupUIEventListeners() {
+                // File loading
+                document.getElementById('loadModelBtn').addEventListener('click', () => {
+                    document.getElementById('fileInput').click();
+                });
+
+                document.getElementById('fileInput').addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        this.loadModel(e.target.files[0]);
+                    }
+                });
+
+                // Transform mode buttons
+                document.getElementById('translateBtn').addEventListener('click', () => {
+                    this.setTransformMode('translate');
+                });
+
+                document.getElementById('rotateBtn').addEventListener('click', () => {
+                    this.setTransformMode('rotate');
+                });
+
+                document.getElementById('scaleBtn').addEventListener('click', () => {
+                    this.setTransformMode('scale');
+                });
+
+                // HTML and Animation
+                document.getElementById('addHTMLBtn').addEventListener('click', () => {
+                    this.addHTMLElement();
+                });
+
+                document.getElementById('addKeyframeBtn').addEventListener('click', () => {
+                    this.addKeyframe();
+                });
+
+                // Timeline controls
+                document.getElementById('playBtn').addEventListener('click', () => {
+                    this.togglePlayback();
+                });
+
+                document.getElementById('timeline').addEventListener('click', (e) => {
+                    this.seekTimeline(e);
+                });
+
+                // Instructions
+                document.getElementById('addInstructionBtn').addEventListener('click', () => {
+                    this.addInstruction();
+                });
+            }
+
+            onWindowResize() {
+                const width = window.innerWidth;
+                const height = window.innerHeight;
+
+                this.camera.aspect = width / height;
+                this.camera.updateProjectionMatrix();
+
+                this.renderer.setSize(width, height);
+                this.cssRenderer.setSize(width, height);
+            }
+
+            onPointerDown(event) {
+                event.preventDefault();
+
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+                this.raycaster.setFromCamera(this.pointer, this.camera);
+                
+                // Check 3D objects
+                const intersects = this.raycaster.intersectObjects(this.objects, true);
+                
+                if (intersects.length > 0) {
+                    const object = intersects[0].object;
+                    // Find the root object if it's part of a group
+                    let rootObject = object;
+                    while (rootObject.parent && rootObject.parent.type !== 'Scene') {
+                        if (this.objects.includes(rootObject.parent)) {
+                            rootObject = rootObject.parent;
+                            break;
+                        }
+                        rootObject = rootObject.parent;
+                    }
+                    this.selectObject(rootObject);
+                } else {
+                    // Check if clicking on empty space
+                    if (!event.shiftKey) {
+                        this.deselectObject();
+                    }
+                }
+            }
+
+            onPointerMove(event) {
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            }
+
+            onKeyDown(event) {
+                switch(event.key.toLowerCase()) {
+                    case 'g':
+                        event.preventDefault();
+                        this.setTransformMode('translate');
+                        break;
+                    case 'r':
+                        event.preventDefault();
+                        this.setTransformMode('rotate');
+                        break;
+                    case 's':
+                        event.preventDefault();
+                        this.setTransformMode('scale');
+                        break;
+                    case 'delete':
+                        event.preventDefault();
+                        this.deleteSelectedObject();
+                        break;
+                    case 'escape':
+                        event.preventDefault();
+                        this.deselectObject();
+                        break;
+                    case ' ':
+                        event.preventDefault();
+                        this.togglePlayback();
+                        break;
+                }
+            }
+
+            selectObject(object) {
+                if (this.objects.includes(object)) {
+                    this.selectedObject = object;
+                    this.transformControls.attach(object);
+                    this.updateObjectList();
+                    console.log('Selected:', object.name);
+                }
+            }
+
+            deselectObject() {
+                this.selectedObject = null;
+                this.transformControls.detach();
+                this.updateObjectList();
+            }
+
+            setTransformMode(mode) {
+                this.transformControls.setMode(mode);
+                const modeText = {
+                    'translate': 'Verschieben',
+                    'rotate': 'Drehen',
+                    'scale': 'Skalieren'
+                };
+                document.getElementById('transformMode').textContent = `Modus: ${modeText[mode]}`;
+            }
+
+            loadModel(file) {
+                const url = URL.createObjectURL(file);
+                const extension = file.name.split('.').pop().toLowerCase();
+
+                console.log('Loading model:', file.name);
+
+                if (extension === 'gltf' || extension === 'glb') {
+                    this.gltfLoader.load(
+                        url,
+                        (gltf) => {
+                            const model = gltf.scene;
+                            model.name = file.name;
+                            
+                            // Calculate bounding box and normalize size
+                            const box = new THREE.Box3().setFromObject(model);
+                            const size = box.getSize(new THREE.Vector3());
+                            const maxDim = Math.max(size.x, size.y, size.z);
+                            const scale = 2 / maxDim;
+                            model.scale.multiplyScalar(scale);
+                            
+                            // Center the model
+                            box.setFromObject(model);
+                            const center = box.getCenter(new THREE.Vector3());
+                            model.position.sub(center);
+                            model.position.y = 0;
+                            
+                            // Enable shadows
+                            model.traverse((child) => {
+                                if (child.isMesh) {
+                                    child.castShadow = true;
+                                    child.receiveShadow = true;
+                                }
+                            });
+                            
+                            this.scene.add(model);
+                            this.objects.push(model);
+                            this.updateObjectList();
+                            
+                            URL.revokeObjectURL(url);
+                            console.log('Model loaded successfully');
+                        },
+                        (progress) => {
+                            console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+                        },
+                        (error) => {
+                            console.error('Error loading model:', error);
+                            alert('Fehler beim Laden des Modells: ' + error.message);
+                            URL.revokeObjectURL(url);
+                        }
+                    );
+                } else {
+                    alert('Unsupported file format. Please use GLTF or GLB files.');
+                    URL.revokeObjectURL(url);
+                }
+            }
+
+            addHTMLElement() {
+                const element = document.createElement('div');
+                element.className = 'html3d-element';
+                element.innerHTML = `
+                    <h3 contenteditable="true">Anweisung ${this.htmlElements.length + 1}</h3>
+                    <p contenteditable="true">Klicken Sie hier, um Text zu bearbeiten</p>
+                    <div style="margin-top: 8px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox"> Schritt abgeschlossen
+                        </label>
+                    </div>
+                `;
+                
+                // Create CSS3D object
+                const cssObject = new CSS3DObject(element);
+                cssObject.position.set(
+                    Math.random() * 4 - 2,
+                    2,
+                    Math.random() * 4 - 2
+                );
+                cssObject.scale.multiplyScalar(0.01);
+                
+                // Store reference
+                cssObject.userData.isHTML = true;
+                cssObject.name = `HTML Element ${this.htmlElements.length + 1}`;
+                
+                this.scene.add(cssObject);
+                this.htmlElements.push(cssObject);
+                this.objects.push(cssObject);
+                this.updateObjectList();
+                
+                // Make interactive
+                element.style.pointerEvents = 'auto';
+                
+                // Add click handler to select
+                element.addEventListener('click', (e) => {
+                    if (e.target.tagName !== 'INPUT') {
+                        e.stopPropagation();
+                        this.selectObject(cssObject);
+                    }
+                });
+            }
+
+            addKeyframe() {
+                if (!this.selectedObject) {
+                    alert('Bitte wählen Sie zuerst ein Objekt aus');
+                    return;
+                }
+
+                const keyframe = {
+                    time: this.currentTime,
+                    position: this.selectedObject.position.clone(),
+                    rotation: this.selectedObject.rotation.clone(),
+                    scale: this.selectedObject.scale.clone()
+                };
+
+                if (!this.keyframes.has(this.selectedObject)) {
+                    this.keyframes.set(this.selectedObject, []);
+                }
+                
+                const frames = this.keyframes.get(this.selectedObject);
+                
+                // Remove existing keyframe at same time
+                const existingIndex = frames.findIndex(f => Math.abs(f.time - keyframe.time) < 0.01);
+                if (existingIndex !== -1) {
+                    frames.splice(existingIndex, 1);
+                }
+                
+                frames.push(keyframe);
+                frames.sort((a, b) => a.time - b.time);
+                
+                this.updateTimeline();
+                console.log(`Keyframe added at ${keyframe.time.toFixed(1)}s for ${this.selectedObject.name}`);
+            }
+
+            updateTimeline() {
+                const timeline = document.getElementById('timeline');
+                
+                // Remove old keyframe markers
+                timeline.querySelectorAll('.keyframe').forEach(k => k.remove());
+                
+                // Add keyframe markers
+                this.keyframes.forEach((frames, object) => {
+                    frames.forEach(frame => {
+                        const marker = document.createElement('div');
+                        marker.className = 'keyframe';
+                        marker.style.left = `${(frame.time / this.duration) * 100}%`;
+                        marker.title = `${object.name} - ${frame.time.toFixed(1)}s`;
+                        timeline.appendChild(marker);
+                        
+                        marker.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            this.currentTime = frame.time;
+                            this.updateAnimation();
+                        });
+                    });
+                });
+            }
+
+            togglePlayback() {
+                this.isPlaying = !this.isPlaying;
+                const playBtn = document.getElementById('playBtn');
+                playBtn.innerHTML = `<span class="material-icons">${this.isPlaying ? 'pause' : 'play_arrow'}</span>`;
+            }
+
+            seekTimeline(event) {
+                const timeline = document.getElementById('timeline');
+                const rect = timeline.getBoundingClientRect();
+                const percent = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+                this.currentTime = percent * this.duration;
+                this.updateAnimation();
+            }
+
+            updateAnimation() {
+                // Update timeline UI
+                const progress = (this.currentTime / this.duration) * 100;
+                document.getElementById('timelineProgress').style.width = `${progress}%`;
+                document.getElementById('timeDisplay').textContent = 
+                    `${this.currentTime.toFixed(1)}s / ${this.duration.toFixed(1)}s`;
+
+                // Interpolate keyframes
+                this.keyframes.forEach((frames, object) => {
+                    if (frames.length === 0) return;
+
+                    if (frames.length === 1) {
+                        // Single keyframe
+                        const frame = frames[0];
+                        if (this.currentTime >= frame.time) {
+                            object.position.copy(frame.position);
+                            object.rotation.copy(frame.rotation);
+                            object.scale.copy(frame.scale);
+                        }
+                        return;
+                    }
+
+                    // Find surrounding keyframes
+                    let before = null;
+                    let after = null;
+                    
+                    for (let i = 0; i < frames.length; i++) {
+                        if (frames[i].time <= this.currentTime) {
+                            before = frames[i];
+                        }
+                        if (frames[i].time > this.currentTime && !after) {
+                            after = frames[i];
+                            break;
+                        }
+                    }
+
+                    if (before && after) {
+                        // Interpolate between keyframes
+                        const t = (this.currentTime - before.time) / (after.time - before.time);
+                        
+                        object.position.lerpVectors(before.position, after.position, t);
+                        object.scale.lerpVectors(before.scale, after.scale, t);
+                        
+                        // Slerp for rotation
+                        const q1 = new THREE.Quaternion().setFromEuler(before.rotation);
+                        const q2 = new THREE.Quaternion().setFromEuler(after.rotation);
+                        const q = new THREE.Quaternion().slerpQuaternions(q1, q2, t);
+                        object.rotation.setFromQuaternion(q);
+                    } else if (before) {
+                        // After last keyframe
+                        object.position.copy(before.position);
+                        object.rotation.copy(before.rotation);
+                        object.scale.copy(before.scale);
+                    }
+                });
+
+                // Update instruction highlights
+                this.updateInstructionHighlight();
+            }
+
+            addInstruction() {
+                const step = {
+                    id: Date.now(),
+                    title: `Schritt ${this.instructions.length + 1}`,
+                    content: 'Neue Arbeitsanweisung - Klicken zum Bearbeiten',
+                    time: this.currentTime,
+                    linkedObject: this.selectedObject ? this.selectedObject.name : null
+                };
+                
+                this.instructions.push(step);
+                this.instructions.sort((a, b) => a.time - b.time);
+                this.updateInstructionList();
+            }
+
+            updateInstructionList() {
+                const container = document.getElementById('instructionContainer');
+                container.innerHTML = '';
+                
+                this.instructions.forEach((instruction, index) => {
+                    const stepDiv = document.createElement('div');
+                    stepDiv.className = 'instruction-step';
+                    stepDiv.dataset.time = instruction.time;
+                    stepDiv.innerHTML = `
+                        <h4 contenteditable="true">${instruction.title}</h4>
+                        <p contenteditable="true">${instruction.content}</p>
+                        <small>Zeit: ${instruction.time.toFixed(1)}s</small>
+                        ${instruction.linkedObject ? `<small> | Objekt: ${instruction.linkedObject}</small>` : ''}
+                    `;
+                    
+                    // Update instruction on edit
+                    stepDiv.addEventListener('input', (e) => {
+                        if (e.target.tagName === 'H4') {
+                            instruction.title = e.target.textContent;
+                        } else if (e.target.tagName === 'P') {
+                            instruction.content = e.target.textContent;
+                        }
+                    });
+                    
+                    // Jump to time on click
+                    stepDiv.addEventListener('click', (e) => {
+                        if (e.target.getAttribute('contenteditable') !== 'true') {
+                            this.currentTime = instruction.time;
+                            this.updateAnimation();
+                        }
+                    });
+                    
+                    container.appendChild(stepDiv);
+                });
+                
+                this.updateInstructionHighlight();
+            }
+
+            updateInstructionHighlight() {
+                const steps = document.querySelectorAll('.instruction-step');
+                steps.forEach(step => {
+                    const time = parseFloat(step.dataset.time);
+                    if (Math.abs(time - this.currentTime) < 0.1) {
+                        step.style.borderLeft = '4px solid #f2b848';
+                        step.style.paddingLeft = '8px';
+                    } else {
+                        step.style.borderLeft = 'none';
+                        step.style.paddingLeft = '12px';
+                    }
+                });
+            }
+
+            updateObjectList() {
+                const list = document.getElementById('objectList');
+                list.innerHTML = '';
+                
+                this.objects.forEach(obj => {
+                    const item = document.createElement('div');
+                    item.className = 'object-item';
+                    if (obj === this.selectedObject) {
+                        item.classList.add('selected');
+                    }
+                    
+                    const icon = obj.userData.isHTML ? 'text_fields' : 'view_in_ar';
+                    item.innerHTML = `<span class="material-icons" style="font-size: 16px; vertical-align: middle;">${icon}</span> ${obj.name || 'Unnamed Object'}`;
+                    
+                    item.addEventListener('click', () => this.selectObject(obj));
+                    list.appendChild(item);
+                });
+            }
+
+            updateObjectTransform() {
+                // Called when object is being transformed
+                // Could be used to update UI or store transforms
+            }
+
+            deleteSelectedObject() {
+                if (!this.selectedObject) return;
+                
+                if (confirm(`"${this.selectedObject.name}" wirklich löschen?`)) {
+                    const index = this.objects.indexOf(this.selectedObject);
+                    if (index > -1) {
+                        this.scene.remove(this.selectedObject);
+                        this.objects.splice(index, 1);
+                        
+                        // Remove from HTML elements if applicable
+                        const htmlIndex = this.htmlElements.indexOf(this.selectedObject);
+                        if (htmlIndex > -1) {
+                            this.htmlElements.splice(htmlIndex, 1);
+                        }
+                        
+                        // Remove keyframes
+                        this.keyframes.delete(this.selectedObject);
+                        
+                        // Clean up
+                        if (this.selectedObject.geometry) this.selectedObject.geometry.dispose();
+                        if (this.selectedObject.material) {
+                            if (Array.isArray(this.selectedObject.material)) {
+                                this.selectedObject.material.forEach(m => m.dispose());
+                            } else {
+                                this.selectedObject.material.dispose();
+                            }
+                        }
+                        
+                        this.deselectObject();
+                        this.updateObjectList();
+                        this.updateTimeline();
+                    }
+                }
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const delta = this.clock.getDelta();
+                
+                // Update controls
+                this.orbitControls.update();
+                
+                // Update animation
+                if (this.isPlaying) {
+                    this.currentTime += delta;
+                    if (this.currentTime > this.duration) {
+                        this.currentTime = 0;
+                    }
+                    this.updateAnimation();
+                }
+                
+                // Update billboards (HTML elements face camera)
+                this.htmlElements.forEach(element => {
+                    // Get camera position in element's local space
+                    const cameraPosition = this.camera.position.clone();
+                    element.lookAt(cameraPosition);
+                    
+                    // Keep only Y rotation for vertical billboards
+                    element.rotation.x = 0;
+                    element.rotation.z = 0;
+                });
+                
+                // Render both scenes
+                this.renderer.render(this.scene, this.camera);
+                this.cssRenderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Start the application when module loads
+        const app = new WorkInstructionEditor();
+        
+        // Make app accessible globally for debugging
+        window.app = app;
+    </script>
+</body>
+</html>

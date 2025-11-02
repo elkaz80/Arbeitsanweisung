@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Arbeitsanweisungs-Editor Pro</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #1a1d21;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Navbar */
+        .navbar {
+            background-color: #2a2d31;
+            display: flex;
+            align-items: center;
+            padding: 0;
+            border-bottom: 1px solid #3a3d41;
+            height: 40px;
+            z-index: 1000;
+        }
+
+        .navbar-menu {
+            display: flex;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+
+        .navbar-item {
+            position: relative;
+        }
+
+        .navbar-link {
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            height: 100%;
+            color: #e0e0e0;
+            text-decoration: none;
+            transition: background-color 0.2s;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .navbar-link:hover {
+            background-color: #3a3d41;
+        }
+
+        .navbar-item.active .navbar-link {
+            background-color: #4a4d51;
+        }
+
+        /* Dropdown */
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: #2a2d31;
+            border: 1px solid #3a3d41;
+            border-radius: 0 0 4px 4px;
+            min-width: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .navbar-item.active .dropdown-menu {
+            display: block;
+        }
+
+        .dropdown-item {
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border: none;
+            background: none;
+            color: #e0e0e0;
+            width: 100%;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        .dropdown-item:hover {
+            background-color: #3a3d41;
+        }
+
+        .dropdown-divider {
+            height: 1px;
+            background-color: #3a3d41;
+            margin: 4px 0;
+        }
+
+        .dropdown-header {
+            padding: 8px 16px;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #888;
+            font-weight: 600;
+        }
+
+        /* Layout */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background-color: #2a2d31;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #3a3d41;
+        }
+
+        .sidebar-section {
+            padding: 16px;
+            border-bottom: 1px solid #3a3d41;
+        }
+
+        .sidebar-header {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 12px;
+        }
+
+        /* Object List */
+        .object-tree {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .object-tree-item {
+            user-select: none;
+        }
+
+        .object-tree-row {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .object-tree-row:hover {
+            background-color: #3a3d41;
+        }
+
+        .object-tree-row.selected {
+            background-color: #5a9cf8;
+        }
+
+        .object-tree-toggle {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-right: 4px;
+        }
+
+        .object-tree-icon {
+            font-size: 16px;
+            margin-right: 8px;
+            opacity: 0.8;
+        }
+
+        .object-tree-children {
+            margin-left: 20px;
+            list-style: none;
+            display: none;
+        }
+
+        .object-tree-item.expanded > .object-tree-children {
+            display: block;
+        }
+
+        /* Scene Container */
+        .scene-container {
+            flex: 1;
+            position: relative;
+            background-color: #1a1d21;
+        }
+
+        #three-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #css-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* Context Menu */
+        .context-menu {
+            position: fixed;
+            background-color: #2a2d31;
+            border: 1px solid #3a3d41;
+            border-radius: 4px;
+            padding: 4px 0;
+            display: none;
+            z-index: 1001;
+            min-width: 180px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .context-menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s;
+        }
+
+        .context-menu-item:hover {
+            background-color: #3a3d41;
+        }
+
+        .context-menu-divider {
+            height: 1px;
+            background-color: #3a3d41;
+            margin: 4px 0;
+        }
+
+        /* Timeline */
+        .timeline-container {
+            height: 120px;
+            background-color: #2a2d31;
+            border-top: 1px solid #3a3d41;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .timeline-toolbar {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            gap: 8px;
+            border-bottom: 1px solid #3a3d41;
+        }
+
+        .timeline-track {
+            flex: 1;
+            padding: 8px 16px;
+            position: relative;
+        }
+
+        .timeline-slider {
+            width: 100%;
+            height: 40px;
+            background-color: #1a1d21;
+            border-radius: 4px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .timeline-playhead {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background-color: #f2b848;
+            pointer-events: none;
+        }
+
+        .timeline-keyframe {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 12px;
+            background-color: #5a9cf8;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .timeline-keyframe:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        /* Panels */
+        .floating-panel {
+            position: absolute;
+            background-color: #2a2d31;
+            border: 1px solid #3a3d41;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 100;
+        }
+
+        .panel-header {
+            padding: 12px 16px;
+            background-color: #3a3d41;
+            border-radius: 4px 4px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+        }
+
+        .panel-title {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .panel-close {
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+
+        .panel-close:hover {
+            opacity: 1;
+        }
+
+        .panel-content {
+            padding: 16px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* Material Editor */
+        #material-editor {
+            top: 60px;
+            right: 20px;
+            width: 300px;
+        }
+
+        .material-property {
+            margin-bottom: 12px;
+        }
+
+        .material-property label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 4px;
+            color: #888;
+        }
+
+        .material-property input[type="range"] {
+            width: 100%;
+        }
+
+        .material-property input[type="color"] {
+            width: 100%;
+            height: 30px;
+            border: 1px solid #3a3d41;
+            border-radius: 4px;
+            background-color: #1a1d21;
+            cursor: pointer;
+        }
+
+        /* Tool Library */
+        #tool-library {
+            top: 60px;
+            left: 300px;
+            width: 400px;
+        }
+
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 12px;
+        }
+
+        .tool-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px;
+            background-color: #1a1d21;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tool-item:hover {
+            background-color: #3a3d41;
+            transform: translateY(-2px);
+        }
+
+        .tool-icon {
+            font-size: 32px;
+            margin-bottom: 4px;
+        }
+
+        .tool-name {
+            font-size: 11px;
+            text-align: center;
+        }
+
+        /* HTML Elements */
+        .html3d-element {
+            background: rgba(42, 45, 49, 0.95);
+            padding: 16px;
+            border-radius: 8px;
+            border: 2px solid #5a9cf8;
+            min-width: 200px;
+            color: #e0e0e0;
+            cursor: move;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .html3d-element.selected {
+            border-color: #f2b848;
+            box-shadow: 0 0 20px rgba(242, 184, 72, 0.5);
+        }
+
+        .html3d-element.highlighted {
+            box-shadow: 0 0 20px rgba(90, 156, 248, 0.5);
+        }
+
+        /* Connectors */
+        .connector-line {
+            stroke: #5a9cf8;
+            stroke-width: 2;
+            fill: none;
+            pointer-events: none;
+        }
+
+        .connector-line.animated {
+            stroke-dasharray: 5, 5;
+            animation: dash 0.5s linear infinite;
+        }
+
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -10;
+            }
+        }
+
+        /* Settings Panel */
+        #settings-panel {
+            top: 60px;
+            right: 20px;
+            width: 350px;
+        }
+
+        .settings-section {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #3a3d41;
+        }
+
+        .settings-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .settings-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .settings-label {
+            font-size: 13px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 6px 12px;
+            background-color: #5a9cf8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #4a8ce8;
+        }
+
+        .btn-icon {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: transparent;
+            border: 1px solid #3a3d41;
+            color: #e0e0e0;
+        }
+
+        .btn-icon:hover {
+            background-color: #3a3d41;
+            border-color: #4a4d51;
+        }
+
+        .btn-icon.active {
+            background-color: #5a9cf8;
+            border-color: #5a9cf8;
+            color: white;
+        }
+
+        /* Auto Keyframe Indicator */
+        .auto-key-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background-color: #d65ea5;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: auto;
+            margin-right: 16px;
+        }
+
+        .auto-key-indicator.inactive {
+            background-color: #3a3d41;
+            opacity: 0.6;
+        }
+
+        /* Transform Mode Buttons */
+        .transform-buttons {
+            display: flex;
+            gap: 4px;
+            margin-left: auto;
+            margin-right: 16px;
+        }
+
+        /* Template Creator */
+        #template-creator {
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 500px;
+        }
+
+        .template-preview {
+            background-color: #1a1d21;
+            padding: 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            min-height: 100px;
+        }
+
+        /* Input Styles */
+        input[type="text"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 6px 8px;
+            background-color: #1a1d21;
+            border: 1px solid #3a3d41;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #5a9cf8;
+        }
+
+        /* Checkbox */
+        input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        /* Loading */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #5a9cf8;
+            z-index: 2000;
+        }
+
+        /* File input */
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <ul class="navbar-menu">
+            <li class="navbar-item" data-menu="file">
+                <a class="navbar-link">
+                    <span class="material-icons" style="font-size: 18px;">folder</span>
+                    Datei
+                </a>
+                <div class="dropdown-menu">
+                    <button class="dropdown-item" id="new-project">
+                        <span class="material-icons">add</span>
+                        Neues Projekt
+                    </button>
+                    <button class="dropdown-item" id="load-model">
+                        <span class="material-icons">upload_file</span>
+                        Modell laden
+                    </button>
+                    <button class="dropdown-item" id="save-project">
+                        <span class="material-icons">save</span>
+                        Projekt speichern
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item" id="export-scene">
+                        <span class="material-icons">download</span>
+                        Szene exportieren
+                    </button>
+                    <button class="dropdown-item" id="export-viewer">
+                        <span class="material-icons">web</span>
+                        Als Viewer exportieren
+                    </button>
+                </div>
+            </li>
+            <li class="navbar-item" data-menu="edit">
+                <a class="navbar-link">
+                    <span class="material-icons" style="font-size: 18px;">edit</span>
+                    Bearbeiten
+                </a>
+                <div class="dropdown-menu">
+                    <button class="dropdown-item" id="undo">
+                        <span class="material-icons">undo</span>
+                        Rückgängig
+                    </button>
+                    <button class="dropdown-item" id="redo">
+                        <span class="material-icons">redo</span>
+                        Wiederholen
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item" id="duplicate">
+                        <span class="material-icons">content_copy</span>
+                        Duplizieren
+                    </button>
+                    <button class="dropdown-item" id="delete">
+                        <span class="material-icons">delete</span>
+                        Löschen
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item" id="group">
+                        <span class="material-icons">group_work</span>
+                        Gruppieren
+                    </button>
+                    <button class="dropdown-item" id="ungroup">
+                        <span class="material-icons">layers_clear</span>
+                        Gruppierung aufheben
+                    </button>
+                </div>
+            </li>
+            <li class="navbar-item" data-menu="html">
+                <a class="navbar-link">
+                    <span class="material-icons" style="font-size: 18px;">web</span>
+                    HTML
+                </a>
+                <div class="dropdown-menu" id="html-menu">
+                    <div class="dropdown-header">Standard Templates</div>
+                    <!-- Templates werden dynamisch geladen -->
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item" id="create-template">
+                        <span class="material-icons">add</span>
+                        Template erstellen
+                    </button>
+                </div>
+            </li>
+            <li class="navbar-item" data-menu="tools">
+                <a class="navbar-link">
+                    <span class="material-icons" style="font-size: 18px;">build</span>
+                    Werkzeuge
+                </a>
+                <div class="dropdown-menu">
+                    <button class="dropdown-item" id="open-library">
+                        <span class="material-icons">inventory_2</span>
+                        Werkzeug-Bibliothek
+                    </button>
+                    <button class="dropdown-item" id="add-connector">
+                        <span class="material-icons">cable</span>
+                        Konnektor hinzufügen
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item" id="measure-tool">
+                        <span class="material-icons">straighten</span>
+                        Messen
+                    </button>
+                    <button class="dropdown-item" id="annotation-tool">
+                        <span class="material-icons">note_add</span>
+                        Anmerkung
+                    </button>
+                </div>
+            </li>
+            <li class="navbar-item" data-menu="materials">
+                <a class="navbar-link">
+                    <span class="material-icons" style="font-size: 18px;">palette</span>
+                    Materialien
+                </a>
+                <div class="dropdown-menu">
+                    <button class="dropdown-item" id="edit-material">
+                        <span class="material-icons">edit</span>
+                        Material bearbeiten
+                    </button>
+                    <button class="dropdown-item" id="add-material">
+                        <span class="material-icons">add</span>
+                        Neues Material
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-header">Vorlagen</div>
+                    <button class="dropdown-item material-preset" data-preset="metal">
+                        <span class="material-icons">circle</span>
+                        Metall
+                    </button>
+                    <button class="dropdown-item material-preset" data-preset="plastic">
+                        <span class="material-icons">circle</span>
+                        Plastik
+                    </button>
+                    <button class="dropdown-item material-preset" data-preset="wood">
+                        <span class="material-icons">circle</span>
+                        Holz
+                    </button>
+                </div>
+            </li>
+            <li class="navbar-item" data-menu="view">
+                <a class="navbar-link">
+                    <span class="material-icons" style="font-size: 18px;">visibility</span>
+                    Ansicht
+                </a>
+                <div class="dropdown-menu">
+                    <button class="dropdown-item" id="reset-camera">
+                        <span class="material-icons">center_focus_strong</span>
+                        Kamera zurücksetzen
+                    </button>
+                    <button class="dropdown-item" id="focus-object">
+                        <span class="material-icons">filter_center_focus</span>
+                        Auf Objekt fokussieren
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item toggle" id="toggle-grid">
+                        <span class="material-icons">grid_on</span>
+                        Raster anzeigen
+                    </button>
+                    <button class="dropdown-item toggle" id="toggle-wireframe">
+                        <span class="material-icons">grid_3x3</span>
+                        Wireframe
+                    </button>
+                </div>
+            </li>
+            <li class="navbar-item" data-menu="settings">
+                <a class="navbar-link">
+                    <span class="material-icons" style="font-size: 18px;">settings</span>
+                    Einstellungen
+                </a>
+                <div class="dropdown-menu">
+                    <button class="dropdown-item" id="open-settings">
+                        <span class="material-icons">tune</span>
+                        Szene-Einstellungen
+                    </button>
+                    <button class="dropdown-item" id="camera-settings">
+                        <span class="material-icons">videocam</span>
+                        Kamera-Einstellungen
+                    </button>
+                    <button class="dropdown-item" id="render-settings">
+                        <span class="material-icons">brush</span>
+                        Render-Einstellungen
+                    </button>
+                </div>
+            </li>
+        </ul>
+
+        <!-- Transform Mode Buttons -->
+        <div class="transform-buttons">
+            <button class="btn-icon" id="translate-mode" title="Verschieben (W)">
+                <span class="material-icons">open_with</span>
+            </button>
+            <button class="btn-icon" id="rotate-mode" title="Drehen (E)">
+                <span class="material-icons">rotate_90_degrees_cw</span>
+            </button>
+            <button class="btn-icon" id="scale-mode" title="Skalieren (R)">
+                <span class="material-icons">aspect_ratio</span>
+            </button>
+        </div>
+
+        <!-- Auto Key Indicator -->
+        <div class="auto-key-indicator" id="auto-key-indicator">
+            <span class="material-icons" style="font-size: 16px;">fiber_manual_record</span>
+            Auto Key
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-header">Szene</div>
+                <ul class="object-tree" id="object-tree"></ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-header">Eigenschaften</div>
+                <div id="properties-panel"></div>
+            </div>
+        </aside>
+
+        <!-- Scene -->
+        <div class="scene-container">
+            <canvas id="three-canvas"></canvas>
+            <div id="css-container"></div>
+            <svg id="connector-svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></svg>
+        </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="timeline-container">
+        <div class="timeline-toolbar">
+            <button class="btn-icon" id="play-pause">
+                <span class="material-icons">play_arrow</span>
+            </button>
+            <button class="btn-icon" id="stop">
+                <span class="material-icons">stop</span>
+            </button>
+            <input type="number" id="current-time" value="0" step="0.1" style="width: 60px;">
+            <span>/</span>
+            <input type="number" id="duration" value="10" step="1" style="width: 60px;">
+            <button class="btn" id="add-keyframe">Keyframe</button>
+            <button class="btn" id="toggle-auto-key">Auto Key</button>
+        </div>
+        <div class="timeline-track">
+            <div class="timeline-slider" id="timeline-slider">
+                <div class="timeline-playhead" id="timeline-playhead"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="context-menu">
+        <div class="context-menu-item" id="context-duplicate">
+            <span class="material-icons">content_copy</span>
+            Duplizieren
+        </div>
+        <div class="context-menu-item" id="context-delete">
+            <span class="material-icons">delete</span>
+            Löschen
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" id="context-group">
+            <span class="material-icons">group_work</span>
+            Gruppieren
+        </div>
+        <div class="context-menu-item" id="context-ungroup">
+            <span class="material-icons">layers_clear</span>
+            Gruppierung aufheben
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" id="context-material">
+            <span class="material-icons">palette</span>
+            Material bearbeiten
+        </div>
+        <div class="context-menu-item" id="context-focus">
+            <span class="material-icons">filter_center_focus</span>
+            Fokussieren
+        </div>
+    </div>
+
+    <!-- Floating Panels -->
+    
+    <!-- Material Editor -->
+    <div class="floating-panel" id="material-editor">
+        <div class="panel-header">
+            <span class="panel-title">Material Editor</span>
+            <span class="material-icons panel-close">close</span>
+        </div>
+        <div class="panel-content">
+            <div class="material-property">
+                <label>Farbe</label>
+                <input type="color" id="material-color" value="#5a9cf8">
+            </div>
+            <div class="material-property">
+                <label>Metallic</label>
+                <input type="range" id="material-metalness" min="0" max="1" step="0.01" value="0.5">
+            </div>
+            <div class="material-property">
+                <label>Roughness</label>
+                <input type="range" id="material-roughness" min="0" max="1" step="0.01" value="0.5">
+            </div>
+            <div class="material-property">
+                <label>Emissive</label>
+                <input type="color" id="material-emissive" value="#000000">
+            </div>
+            <div class="material-property">
+                <label>Opacity</label>
+                <input type="range" id="material-opacity" min="0" max="1" step="0.01" value="1">
+            </div>
+            <button class="btn" id="apply-material" style="width: 100%; margin-top: 12px;">Anwenden</button>
+        </div>
+    </div>
+
+    <!-- Tool Library -->
+    <div class="floating-panel" id="tool-library">
+        <div class="panel-header">
+            <span class="panel-title">Werkzeug-Bibliothek</span>
+            <span class="material-icons panel-close">close</span>
+        </div>
+        <div class="panel-content">
+            <div class="tool-grid" id="tool-grid">
+                <!-- Werkzeuge werden dynamisch geladen -->
+            </div>
+            <button class="btn" id="add-custom-tool" style="width: 100%; margin-top: 16px;">
+                <span class="material-icons">add</span>
+                Werkzeug hinzufügen
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="floating-panel" id="settings-panel">
+        <div class="panel-header">
+            <span class="panel-title">Einstellungen</span>
+            <span class="material-icons panel-close">close</span>
+        </div>
+        <div class="panel-content">
+            <div class="settings-section">
+                <h4 style="margin: 0 0 12px 0; font-size: 14px;">Szene</h4>
+                <div class="settings-row">
+                    <label class="settings-label">Hintergrundfarbe</label>
+                    <input type="color" id="bg-color" value="#1a1d21" style="width: 80px;">
+                </div>
+                <div class="settings-row">
+                    <label class="settings-label">Nebel</label>
+                    <input type="checkbox" id="fog-enabled">
+                </div>
+                <div class="settings-row">
+                    <label class="settings-label">Nebel-Farbe</label>
+                    <input type="color" id="fog-color" value="#1a1d21" style="width: 80px;">
+                </div>
+            </div>
+            <div class="settings-section">
+                <h4 style="margin: 0 0 12px 0; font-size: 14px;">Kamera</h4>
+                <div class="settings-row">
+                    <label class="settings-label">FOV</label>
+                    <input type="number" id="camera-fov" value="75" min="10" max="120" style="width: 80px;">
+                </div>
+                <div class="settings-row">
+                    <label class="settings-label">Near</label>
+                    <input type="number" id="camera-near" value="0.1" step="0.1" style="width: 80px;">
+                </div>
+                <div class="settings-row">
+                    <label class="settings-label">Far</label>
+                    <input type="number" id="camera-far" value="1000" step="10" style="width: 80px;">
+                </div>
+            </div>
+            <div class="settings-section">
+                <h4 style="margin: 0 0 12px 0; font-size: 14px;">Rendering</h4>
+                <div class="settings-row">
+                    <label class="settings-label">Schatten</label>
+                    <input type="checkbox" id="shadows-enabled" checked>
+                </div>
+                <div class="settings-row">
+                    <label class="settings-label">Antialiasing</label>
+                    <input type="checkbox" id="antialias-enabled" checked>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Creator -->
+    <div class="floating-panel" id="template-creator">
+        <div class="panel-header">
+            <span class="panel-title">Template erstellen</span>
+            <span class="material-icons panel-close">close</span>
+        </div>
+        <div class="panel-content">
+            <div class="material-property">
+                <label>Template Name</label>
+                <input type="text" id="template-name" placeholder="Mein Template">
+            </div>
+            <div class="material-property">
+                <label>HTML Code</label>
+                <textarea id="template-html" rows="10" placeholder="<div>...</div>"></textarea>
+            </div>
+            <div class="material-property">
+                <label>Vorschau</label>
+                <div class="template-preview" id="template-preview"></div>
+            </div>
+            <button class="btn" id="save-template" style="width: 100%;">Template speichern</button>
+        </div>
+    </div>
+
+    <!-- Hidden Inputs -->
+    <input type="file" id="file-input" accept=".glb,.gltf,.obj,.fbx,.stl,.dae,.3ds">
+    <input type="file" id="image-input" accept="image/*,.svg">
+
+    <!-- Loading -->
+    <div class="loading" id="loading">
+        <span class="material-icons" style="font-size: 48px;">hourglass_empty</span>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

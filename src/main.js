@@ -40,6 +40,8 @@ try {
     const scene = appManager.getScene();
     const camera = appManager.getCamera();
     const renderer = appManager.getRenderer();
+    const controlsManager = new ControlsManager(camera, renderer, scene); // Renderer-Objekt und Szene übergeben!
+
     const initialRendererSize = { width: appContainer.clientWidth, height: appContainer.clientHeight }; // Größe für ConnectorManager
 
     // --- 2. Initiale Szene aufbauen ---
@@ -55,7 +57,7 @@ try {
     console.log("[Main] Instantiating managers and services...");
     const html3DManager = new HTML3DManager(appContainer, camera); // Braucht Container, Kamera
     const animationManager = new AnimationManager();                // Braucht erstmal nichts
-    const controlsManager = new ControlsManager(camera, renderer.domElement); // Braucht Kamera, DOM
+    //const controlsManager = new ControlsManager(camera, renderer, scene); // <--- Fehler! 'controlsManager' gibt es schon.
     const loaderService = new LoaderService(appManager);            // Braucht AppManager
     const connectorManager = new ConnectorManager(scene, camera, initialRendererSize); // Braucht Szene, Kamera, Größe
     const uiManager = new UIManager();                              // Braucht erstmal nichts
